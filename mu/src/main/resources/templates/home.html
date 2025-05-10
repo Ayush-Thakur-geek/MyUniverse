@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html
+        lang="en"
+        th:replace="~{base :: parent(~{:: #content}, ~{:: title}, ~{:: script})}"
+>
+  <title>Home Page</title>
+</head>
+<body>
+
+<div id="content">
+  <div class="relative flex flex-col items-center">
+    <div th:replace="~{signIn :: register}"></div>
+  </div>
+  <h1>home</h1>
+</div>
+
+<div id="script">
+  <script>
+    console.log("Home page script");
+  </script>
+</div>
+
+</body>
+</html>
