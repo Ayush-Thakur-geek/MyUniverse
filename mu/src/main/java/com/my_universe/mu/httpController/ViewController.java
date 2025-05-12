@@ -1,4 +1,4 @@
-package com.my_universe.mu.controller;
+package com.my_universe.mu.httpController;
 
 import com.my_universe.mu.model.RegisterForm;
 import com.my_universe.mu.repository.AvatarRepository;
@@ -12,7 +12,6 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 
 @Controller
 @Log4j2
@@ -49,6 +48,6 @@ public class ViewController {
         }
 
         userService.save(registerForm);
-        return "redirect:/home"; // Redirect on success
+        return "redirect:/authenticated/dashboard"; // Redirect on success
     }
 }

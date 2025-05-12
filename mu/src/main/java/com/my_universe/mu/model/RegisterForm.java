@@ -35,5 +35,6 @@ public class RegisterForm {
     )
     private String password;
 
+    @NotBlank
     private String avatarId;
 }

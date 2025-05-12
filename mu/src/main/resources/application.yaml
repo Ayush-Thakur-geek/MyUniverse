@@ -7,6 +7,11 @@ spring:
     username: root
     password: Thakur@7
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -15,3 +20,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+cloudinary:
+  apiKey: 645868366775829
+  apiSecret: ehq83EKh3G0S2ny8vLyQhsblRiI
+  cloudName: dq6fhd4js

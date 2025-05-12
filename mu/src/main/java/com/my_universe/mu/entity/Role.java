@@ -1,5 +1,7 @@
 package com.my_universe.mu.entity;
 
 public enum Role {
-    ADMIN, USER
+    ROLE_USER,  // ✅ Correct format
+    ROLE_ADMIN
 }
+

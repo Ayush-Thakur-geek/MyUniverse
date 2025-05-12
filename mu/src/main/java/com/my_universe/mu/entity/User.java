@@ -28,9 +28,9 @@ public class User {
     private String password;
 
     @ManyToOne
-    @JoinColumn(name = "avatar_id")
+    @JoinColumn(name = "avatar_id", nullable = false)
     private Avatar avatar;
 
     @Enumerated(EnumType.STRING)
-    private Role role = Role.USER;
+    private Role role;
 }
