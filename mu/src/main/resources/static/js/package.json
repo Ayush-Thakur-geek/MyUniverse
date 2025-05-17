@@ -1,0 +1,14 @@
+{
+  "name": "js",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Ayush Thakur",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "phaser": "^3.88.2"
+  }
+}

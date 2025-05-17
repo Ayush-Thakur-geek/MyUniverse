@@ -4,7 +4,7 @@
         lang="en"
         th:fragment="parent(content, title, script)"
         xmlns:th="http://www.thymleaf.org"
->
+        xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8">
     <title th:replace="${title}">Title</title>
@@ -29,14 +29,19 @@
 <!--</div>-->
 
 <div class="fixed top-0 left-0 w-full z-50">
-    <div th:replace="~{navbar :: nav}"></div>
+    <div sec:authorize="isAuthenticated()">
+        <div data-th-replace="~{authenticated/auth-nav :: auth-nav}"></div>
+    </div>
+    <div sec:authorize="isAnonymous()">
+        <div data-th-replace="~{navbar :: nav}"></div>
+    </div>
 </div>
 <div class="p-10 pt-16 relative flex flex-col items-center justify-center">
     <section data-th-replace="${content}"></section>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
-<script data-th-src="@{'/js/script.js'}"></script>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
 <th:block data-th-replace="${script}"></th:block>
 </body>
 </html>

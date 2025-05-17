@@ -20,7 +20,7 @@ public class Space {
     private String id;
     private String name;
     private int width;
-    private Integer height;
+    private int height;
     private String thumbnail;
 
     @OneToMany(mappedBy = "space")
