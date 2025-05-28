@@ -1,0 +1,21 @@
+{
+  "name": "websocket-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "npm-rm": "rm -rf node_modules",
+    "rm": "rm -rf .parcel-cache dist",
+    "dev": "parcel watch dummy.html --public-url ./ --dist-dir ../resources/static/js",
+    "build": "parcel build dummy.html --public-url ./js --dist-dir ../resources/static/js"
+  },
+  "author": "Ayush Thakur",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@stomp/stompjs": "^7.1.1",
+    "sockjs-client": "^1.6.1"
+  },
+  "devDependencies": {
+    "parcel": "^2.15.2"
+  }
+}

@@ -23,6 +23,8 @@ public class SecurityConfig {
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/user/**").hasRole("USER")
                         .requestMatchers("/open/**").hasAnyRole("ADMIN", "USER")
+                        .requestMatchers("/app/**").hasAnyRole("ADMIN", "USER")
+                        .requestMatchers("/game-ws/**").permitAll()
                         .anyRequest().permitAll()
                 )
                 .csrf(csrf -> csrf.disable())

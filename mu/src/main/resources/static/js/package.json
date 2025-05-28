@@ -9,6 +9,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "phaser": "^3.88.2"
+    "@stomp/stompjs": "^7.1.1",
+    "phaser": "^3.88.2",
+    "sockjs": "^0.3.24",
+    "sockjs-client": "^1.6.1"
   }
 }

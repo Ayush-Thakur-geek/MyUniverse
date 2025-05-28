@@ -1,27 +1,86 @@
-// import Phaser from 'phaser'
-
-console.log("hello")
+import gameWebSocket from './webSoc.js';
 
 const PLAYER_RADIUS = 16;
 class GameScene extends Phaser.Scene {
-    cursors;
-    player;
+    constructor() {
+        super("scene-game");
+        this.cursors;
+        this.player;
+        this.username;
+        this.colorsList = [0x4ecdc4, 0xff6b6b, 0xf7b32b, 0x1a535c, 0xb388eb];
+        this.remotePlayers = new Map();
+    }
 
     create() {
         // Create circle and enable physics
-        this.player = this.add.circle(400, 300, PLAYER_RADIUS, 0x4ecdc4);
+        let x = Math.random() * 800;
+        let y = Math.random() * 600;
+        this.player = this.add.circle(
+            x, // X coordinate between 0 and 800
+            y, // Y coordinate between 0 and 600
+            PLAYER_RADIUS,
+            this.colorsList[Math.floor(Math.random() * 5)] // Random color from colorsList
+        );
         this.physics.add.existing(this.player);
         this.player.body.setCollideWorldBounds(true);
 
         this.cursors = this.input.keyboard.createCursorKeys();
+
+        gameWebSocket.onPlayerPositionUpdate = (position) => {
+            if (this.remotePlayers.has(position.username)) {
+                let player = this.remotePlayers.get(position.username)
+                player.x = position.x;
+                player.y = position.y;
+            }
+        };
+
+        gameWebSocket.onPlayerJoining = (newPlayer) => {
+
+            const circle = this.add.circle(
+                newPlayer.x,
+                newPlayer.y,
+                PLAYER_RADIUS,
+                this.colorsList[Math.floor(Math.random() * 5)]
+            );
+            this.remotePlayers.set(newPlayer.username, newPlayer);
+        }
+
+        gameWebSocket.connect();
+
+        this.sendPlayerPosition();
     }
 
     update() {
         let speed = 3;
-        if (this.cursors.left.isDown)  this.player.x -= speed;
-        if (this.cursors.right.isDown) this.player.x += speed;
-        if (this.cursors.up.isDown)    this.player.y -= speed;
-        if (this.cursors.down.isDown)  this.player.y += speed;
+        let moved = false;
+        if (this.cursors.left.isDown) {
+            this.player.x -= speed;
+            moved = true;
+        }
+        if (this.cursors.right.isDown) {
+            this.player.x += speed;
+            moved = true;
+        }
+        if (this.cursors.up.isDown) {
+            this.player.y -= speed;
+            moved = true;
+        }
+        if (this.cursors.down.isDown) {
+            this.player.y += speed;
+            moved = true;
+        }
+
+        if (moved) {
+            this.sendPlayerPosition();
+        }
+    }
+
+    sendPlayerPosition() {
+        gameWebSocket.sendPlayerPosition({
+            x: this.player.x,
+            y: this.player.y,
+            playerId: this.playerId
+        })
     }
 }
 

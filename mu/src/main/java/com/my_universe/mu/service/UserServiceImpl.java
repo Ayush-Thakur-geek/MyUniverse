@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service
 public class UserServiceImpl implements UserService {
 
@@ -37,4 +39,16 @@ public class UserServiceImpl implements UserService {
         userRepo.save(user);
         return "UserSaved";
     }
+
+    @Override
+    public String getAvatarId(String username) {
+        Optional<User> user = userRepo.findByUsername(username);
+        if (!user.isPresent()) {
+            throw new IllegalArgumentException("User not found");
+        }
+
+        return user.get().getAvatar().getId();
+    }
+
+
 }

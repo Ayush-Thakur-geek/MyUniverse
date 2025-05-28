@@ -3,16 +3,13 @@ package com.my_universe.mu.httpController;
 import com.my_universe.mu.model.Room;
 import com.my_universe.mu.service.RoomService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
-import java.util.Map;
 
 @Controller
-@RequestMapping("/api/rooms")
+@RequestMapping("/app/rooms")
 public class RoomControllers {
 
     @Autowired
@@ -29,7 +26,7 @@ public class RoomControllers {
         System.out.println(principal.getName() + " " + room.getSpaceId());
         Room savedRoom = roomService.createRoom(room.getSpaceId(), username, room.getRoomName());
 
-        return "redirect:/api/rooms/"+savedRoom.getRoomId();
+        return "redirect:/app/rooms/"+savedRoom.getRoomId();
     }
 
     @GetMapping("/{roomId}")

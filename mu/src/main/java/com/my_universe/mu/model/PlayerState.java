@@ -10,8 +10,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Builder
 public class PlayerState {
-    private String userId;
+    private String userName;
     private float x;
     private float y;
     private String avatarId;
+
+    public enum permission {
+        MOVE, NOT_MOVE
+    }
 }
