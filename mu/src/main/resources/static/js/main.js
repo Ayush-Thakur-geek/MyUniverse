@@ -11,38 +11,41 @@ class GameScene extends Phaser.Scene {
         this.remotePlayers = new Map();
     }
 
+
     create() {
-        // Create circle and enable physics
-        let x = Math.random() * 800;
-        let y = Math.random() * 600;
-        this.player = this.add.circle(
-            x, // X coordinate between 0 and 800
-            y, // Y coordinate between 0 and 600
-            PLAYER_RADIUS,
-            this.colorsList[Math.floor(Math.random() * 5)] // Random color from colorsList
-        );
-        this.physics.add.existing(this.player);
-        this.player.body.setCollideWorldBounds(true);
+        console.log("Inside the create method")
 
         this.cursors = this.input.keyboard.createCursorKeys();
 
-        gameWebSocket.onPlayerPositionUpdate = (position) => {
-            if (this.remotePlayers.has(position.username)) {
-                let player = this.remotePlayers.get(position.username)
-                player.x = position.x;
-                player.y = position.y;
+
+        gameWebSocket.initialPlayerState = (playerState) => {
+
+            console.log("Inside the initialPlayerState method")
+
+            for (let i = 0; i < playerState.length; i++) {
+
+                if (i === playerState.length - 1) {
+                    console.log("original player added")
+                    this.username = playerState[i].username;
+                    this.player = this.add.circle(
+                        playerState[i].x, // X coordinate between 0 and 800
+                        playerState[i].y, // Y coordinate between 0 and 600
+                        PLAYER_RADIUS,
+                        this.colorsList[Math.floor(Math.random() * 5)] // Random color from colorsList
+                    );
+                    this.physics.add.existing(this.player);
+                    this.player.body.setCollideWorldBounds(true);
+                } else {
+                    console.log("remote player added")
+                    const circle = this.add.circle(
+                        playerState[i].x, // X coordinate between 0 and 800
+                        playerState[i].y, // Y coordinate between 0 and 600
+                        PLAYER_RADIUS,
+                        this.colorsList[Math.floor(Math.random() * 5)]
+                    );
+                    this.remotePlayers.set(playerState[i].username, circle);
+                }
             }
-        };
-
-        gameWebSocket.onPlayerJoining = (newPlayer) => {
-
-            const circle = this.add.circle(
-                newPlayer.x,
-                newPlayer.y,
-                PLAYER_RADIUS,
-                this.colorsList[Math.floor(Math.random() * 5)]
-            );
-            this.remotePlayers.set(newPlayer.username, newPlayer);
         }
 
         gameWebSocket.connect();
@@ -73,14 +76,6 @@ class GameScene extends Phaser.Scene {
         if (moved) {
             this.sendPlayerPosition();
         }
-    }
-
-    sendPlayerPosition() {
-        gameWebSocket.sendPlayerPosition({
-            x: this.player.x,
-            y: this.player.y,
-            playerId: this.playerId
-        })
     }
 }
 

@@ -14,7 +14,6 @@ import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
 import java.util.List;
-import java.util.UUID;
 
 @Controller
 public class GameController {
@@ -58,7 +57,16 @@ public class GameController {
     }
 
     @SubscribeMapping("/initial")
-    public List<PlayerState> sendInitialState() {
+    public List<PlayerState> sendInitialState(Principal principal) {
+        System.out.println("Subscribe mapping called!");
+        PlayerState initialState = PlayerState.builder()
+                .userName(principal.getName())
+                .x(100)
+                .y(100)
+                .avatarId(userService.getAvatarId(principal.getName()))
+                .build();
+
+        gameStateService.addPlayer(initialState);
         return gameStateService.getAllPlayerPositions();
     }
 }

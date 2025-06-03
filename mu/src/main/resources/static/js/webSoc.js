@@ -4,8 +4,6 @@ import {Stomp} from "@stomp/stompjs";
 class GameWebSocket {
     constructor() {
         this.stompClient = null;
-        this.onPlayerPositionUpdate = null;
-        this.onPlayerJoining = null;
     }
 
     connect() {
@@ -13,19 +11,16 @@ class GameWebSocket {
         this.stompClient = Stomp.over(socket);
 
         this.stompClient.connect({}, (frame) => {
-            console.log("Connected!");
+            console.log("Connected: ", frame);
 
-            this.stompClient.subscribe('/topic/position', (message) => {
-                const position = JSON.parse(message.body);
-                if (this.onPlayerPositionUpdate) {
-                    this.onPlayerPositionUpdate(position);
-                }
-            });
+            // this.stompClient.subscribe('/topic/player-joined', (message) => {
+            //     const
+            // });
 
-            this.stompClient.subscribe('/topic/player-joined', (message) => {
-                const newPlayer = JSON.parse(message.body);
-                if (this.onPlayerJoining) {
-                    this.onPlayerJoining(newPlayer);
+            this.stompClient.subscribe('/app/initial', (message) => {
+                const initialPlayers = JSON.parse(message.body);
+                if (this.initialPlayerState) {
+                    this.initialPlayerState(initialPlayers);
                 }
             });
         });

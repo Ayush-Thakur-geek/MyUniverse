@@ -48,6 +48,7 @@ public class ViewController {
         }
 
         userService.save(registerForm);
-        return "redirect:/authenticated/dashboard"; // Redirect on success
+        return "redirect:/open/dashboard"; // Redirect on success
     }
+
 }

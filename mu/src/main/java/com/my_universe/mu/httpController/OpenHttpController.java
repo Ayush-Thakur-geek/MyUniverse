@@ -38,7 +38,7 @@ public class OpenHttpController {
     ) {
         System.out.println("test");
         imageService.uploadSpaceThumbnail(space);
-        return "authenticated/dashboard";
+        return "redirect:/authenticated/dashboard";
     }
 
 }

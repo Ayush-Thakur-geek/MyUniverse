@@ -1,6 +1,7 @@
 import gameWebSocket from './webSoc.js';
 
 const PLAYER_RADIUS = 16;
+
 class GameScene extends Phaser.Scene {
     constructor() {
         super("scene-game");
@@ -12,76 +13,62 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
-        // Create circle and enable physics
-        let x = Math.random() * 800;
-        let y = Math.random() * 600;
-        this.player = this.add.circle(
-            x, // X coordinate between 0 and 800
-            y, // Y coordinate between 0 and 600
-            PLAYER_RADIUS,
-            this.colorsList[Math.floor(Math.random() * 5)] // Random color from colorsList
-        );
-        this.physics.add.existing(this.player);
-        this.player.body.setCollideWorldBounds(true);
+        console.log("Inside the create method")
 
-        this.cursors = this.input.keyboard.createCursorKeys();
+        this.physics.world.setBounds(0, 0, 800, 600);
 
-        gameWebSocket.onPlayerPositionUpdate = (position) => {
-            if (this.remotePlayers.has(position.username)) {
-                let player = this.remotePlayers.get(position.username)
-                player.x = position.x;
-                player.y = position.y;
+        gameWebSocket.initialPlayerState = (playerState) => {
+            console.log("Inside the initialPlayerState method: ", playerState)
+
+            for (let i = 0; i < playerState.length; i++) {
+                if (i == playerState.length - 1) {
+                    console.log(`player: ${playerState[i].userName}`);
+                    this.username = playerState[i].userName;
+
+                    this.player = this.add.circle(
+                        10, // X coordinate between 0 and 800
+                        100, // Y coordinate between 0 and 600
+                        PLAYER_RADIUS,
+                        this.colorsList[Math.floor(Math.random() * 5)] // Random color from colorsList
+                    );
+                    this.physics.add.existing(this.player);
+                    this.player.body.setCollideWorldBounds(true);
+                    this.cursors = this.input.keyboard.createCursorKeys();
+
+                } else {
+                    console.log("remote player added");
+                    const circle = this.add.circle(
+                        playerState[i].x,
+                        playerState[i].y,
+                        PLAYER_RADIUS,
+                        this.colorsList[Math.floor(Math.random() * 5)]
+                    );
+                    this.remotePlayers.set(playerState[i].userName, circle);
+                }
             }
-        };
-
-        gameWebSocket.onPlayerJoining = (newPlayer) => {
-
-            const circle = this.add.circle(
-                newPlayer.x,
-                newPlayer.y,
-                PLAYER_RADIUS,
-                this.colorsList[Math.floor(Math.random() * 5)]
-            );
-            this.remotePlayers.set(newPlayer.username, newPlayer);
         }
 
-        console.log(".connect called");
         gameWebSocket.connect();
-
-        this.sendPlayerPosition();
     }
 
     update() {
-        let speed = 3;
-        let moved = false;
+        // Check if player exists before trying to move it
+        if (!this.player) return;
+
+        let speed = 5;
+
         if (this.cursors.left.isDown) {
             this.player.x -= speed;
-            moved = true;
         }
         if (this.cursors.right.isDown) {
             this.player.x += speed;
-            moved = true;
         }
         if (this.cursors.up.isDown) {
             this.player.y -= speed;
-            moved = true;
         }
         if (this.cursors.down.isDown) {
             this.player.y += speed;
-            moved = true;
         }
-
-        if (moved) {
-            this.sendPlayerPosition();
-        }
-    }
-
-    sendPlayerPosition() {
-        gameWebSocket.sendPlayerPosition({
-            x: this.player.x,
-            y: this.player.y,
-            username: this.username
-        })
     }
 }
 
@@ -90,11 +77,11 @@ const config = {
     width: 800,
     height: 600,
     parent: 'game-container',
-    backgroundColor: 0x000000, // Use black (or another valid color)
+    backgroundColor: 0x000000,
     physics: {
         default: 'arcade',
         arcade: {
-            debug: false
+            debug: false // Set to true if you want to see physics bodies
         }
     },
     scene: [GameScene]
