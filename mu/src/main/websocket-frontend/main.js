@@ -18,35 +18,45 @@ class GameScene extends Phaser.Scene {
         this.physics.world.setBounds(0, 0, 800, 600);
 
         gameWebSocket.initialPlayerState = (playerState) => {
-            console.log("Inside the initialPlayerState method: ", playerState)
+            console.log("Initial players data received:", playerState);
 
-            for (let i = 0; i < playerState.length; i++) {
-                if (i == playerState.length - 1) {
-                    console.log(`player: ${playerState[i].userName}`);
-                    this.username = playerState[i].userName;
+            const currentPlayer = playerState.currentPlayer;
+            const players = playerState.allPlayers || []; // Fallback to empty array
 
-                    this.player = this.add.circle(
-                        10, // X coordinate between 0 and 800
-                        100, // Y coordinate between 0 and 600
-                        PLAYER_RADIUS,
-                        this.colorsList[Math.floor(Math.random() * 5)] // Random color from colorsList
-                    );
+            // Iterate over `players`, not `playerState`
+            players.forEach(player => {
+                console.log("Processing player:", player.userName);
+
+                const circle = this.add.circle(
+                    player.x,
+                    player.y,
+                    PLAYER_RADIUS,
+                    this.colorsList[Math.floor(Math.random() * 5)]
+                );
+
+                if (player.userName === currentPlayer.userName) { // Use currentPlayer.userName
+                    console.log("Current player:", player.userName);
+                    this.username = player.userName;
+                    this.player = circle;
                     this.physics.add.existing(this.player);
                     this.player.body.setCollideWorldBounds(true);
                     this.cursors = this.input.keyboard.createCursorKeys();
-
                 } else {
-                    console.log("remote player added");
-                    const circle = this.add.circle(
-                        playerState[i].x,
-                        playerState[i].y,
-                        PLAYER_RADIUS,
-                        this.colorsList[Math.floor(Math.random() * 5)]
-                    );
-                    this.remotePlayers.set(playerState[i].userName, circle);
+                    console.log("Remote player:", player.userName);
+                    this.remotePlayers.set(player.userName, circle);
                 }
+            });
+        };
+
+
+        gameWebSocket.joinedPlayerState = (playerState) => {
+            console.log(`joined player: ${playerState}`);
+            if (playerState.userName !== this.username) { // ✅ Use userName
+                const circle = this.add.circle(playerState.x, playerState.y, PLAYER_RADIUS, /* ... */);
+                this.remotePlayers.set(playerState.userName, circle); // ✅ Use userName
             }
-        }
+        };
+
 
         gameWebSocket.connect();
     }

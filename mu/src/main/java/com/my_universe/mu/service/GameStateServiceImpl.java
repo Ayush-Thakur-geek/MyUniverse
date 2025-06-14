@@ -36,4 +36,9 @@ public class GameStateServiceImpl implements GameStateService {
     public void removePlayer(String playerId) {
         players.remove(playerId);
     }
+
+    @Override
+    public boolean playerExists(String username) {
+        return players.containsKey(username);
+    }
 }

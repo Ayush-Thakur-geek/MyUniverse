@@ -48,6 +48,18 @@ class GameScene extends Phaser.Scene {
             }
         }
 
+        gameWebSocket.joinedPlayerState = (playerState) => {
+            if (playerState.username != this.username) {
+                const circle =  this.add.circle(
+                    playerState.x,
+                    playerState.y,
+                    PLAYER_RADIUS,
+                    this.colorsList[Math.floor(Math.random() * 5)]
+                );
+                this.remotePlayers.set(playerState.username, circle);
+            }
+        }
+
         gameWebSocket.connect();
 
         this.sendPlayerPosition();

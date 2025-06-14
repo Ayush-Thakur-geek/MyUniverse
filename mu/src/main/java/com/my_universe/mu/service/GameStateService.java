@@ -13,4 +13,6 @@ public interface GameStateService {
     List<PlayerState> getAllPlayerPositions();
 
     void removePlayer(String playerId);
+
+    boolean playerExists(String username);
 }

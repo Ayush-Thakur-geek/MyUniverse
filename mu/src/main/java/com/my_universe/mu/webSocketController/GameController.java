@@ -13,7 +13,10 @@ import org.springframework.messaging.simp.annotation.SubscribeMapping;
 import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
 @Controller
 public class GameController {
@@ -43,30 +46,36 @@ public class GameController {
     @MessageMapping("/join")
     @SendTo("/topic/player-joined")
     public PlayerState join(Principal principal) {
-
-        PlayerState initialState = PlayerState.builder()
-                .userName(principal.getName())
-                .x(0)
-                .y(0)
-                .avatarId(userService.getAvatarId(principal.getName()))
-                .build();
-
-        gameStateService.addPlayer(initialState);
-
-        return initialState;
+        System.out.println("player joined called");
+        return newPlayerState(principal);
     }
 
     @SubscribeMapping("/initial")
-    public List<PlayerState> sendInitialState(Principal principal) {
+    public Map<String, Object> sendInitialState(Principal principal) {
         System.out.println("Subscribe mapping called!");
-        PlayerState initialState = PlayerState.builder()
+        PlayerState initialState = newPlayerState(principal);
+
+        if (!gameStateService.playerExists(principal.getName())) {
+            gameStateService.addPlayer(initialState);
+
+            messagingTemplate.convertAndSend("/topic/player-joined", initialState);
+            System.out.println("Notified other players");
+        }
+        HashMap<String, Object> players = new HashMap<>();
+        players.put("currentPlayer", initialState);
+        players.put("allPlayers", gameStateService.getAllPlayerPositions());
+        return players;
+    }
+
+    private PlayerState newPlayerState(Principal principal) {
+        Random r = new Random();
+        PlayerState newPlayer = PlayerState.builder()
                 .userName(principal.getName())
-                .x(100)
-                .y(100)
+                .x(r.nextInt(500))
+                .y(r.nextInt(500))
                 .avatarId(userService.getAvatarId(principal.getName()))
                 .build();
 
-        gameStateService.addPlayer(initialState);
-        return gameStateService.getAllPlayerPositions();
+        return newPlayer;
     }
 }
