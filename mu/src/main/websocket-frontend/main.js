@@ -50,10 +50,20 @@ class GameScene extends Phaser.Scene {
 
 
         gameWebSocket.joinedPlayerState = (playerState) => {
-            console.log(`joined player: ${playerState}`);
-            if (playerState.userName !== this.username) { // ✅ Use userName
-                const circle = this.add.circle(playerState.x, playerState.y, PLAYER_RADIUS, /* ... */);
-                this.remotePlayers.set(playerState.userName, circle); // ✅ Use userName
+            // console.log(`joined player and creating the player: ${playerState}`);
+            console.log("yo ho ho");
+
+            console.log(`Username of joined player: ${playerState.userName}`);
+            console.log(`Username of local player: ${this.username}`)
+            if (playerState.userName !== this.username) {
+                console.log("Making of the circle")
+                const circle = this.add.circle(
+                    playerState.x,
+                    playerState.y,
+                    PLAYER_RADIUS,
+                    this.colorsList[Math.floor(Math.random() * 5)]
+                );
+                this.remotePlayers.set(playerState.userName, circle);
             }
         };
 

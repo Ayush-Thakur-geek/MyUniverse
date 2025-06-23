@@ -45,9 +45,9 @@ public class GameController {
 
     @MessageMapping("/join")
     @SendTo("/topic/player-joined")
-    public PlayerState join(Principal principal) {
-        System.out.println("player joined called");
-        return newPlayerState(principal);
+    public PlayerState join(PlayerState playerState) {
+        System.out.println("player joined called: " + playerState);
+        return playerState;
     }
 
     @SubscribeMapping("/initial")
@@ -64,6 +64,7 @@ public class GameController {
         HashMap<String, Object> players = new HashMap<>();
         players.put("currentPlayer", initialState);
         players.put("allPlayers", gameStateService.getAllPlayerPositions());
+        System.out.println("Current player: " + players.get("currentPlayer"));
         return players;
     }
 
