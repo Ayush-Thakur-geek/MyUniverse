@@ -676,7 +676,7 @@ class GameScene extends Phaser.Scene {
         super("scene-game");
         this.cursors;
         this.player;
-        this.username;
+        this.username = "local";
         this.colorsList = [
             0x4ecdc4,
             0xff6b6b,
@@ -711,11 +711,10 @@ class GameScene extends Phaser.Scene {
             });
         };
         (0, _webSocJsDefault.default).joinedPlayerState = (playerState)=>{
-            // console.log(`joined player and creating the player: ${playerState}`);
             console.log("yo ho ho");
             console.log(`Username of joined player: ${playerState.userName}`);
             console.log(`Username of local player: ${this.username}`);
-            if (playerState.userName !== this.username) {
+            if (this.username !== "local" && playerState.userName !== this.username) {
                 console.log("Making of the circle");
                 const circle = this.add.circle(playerState.x, playerState.y, PLAYER_RADIUS, this.colorsList[Math.floor(Math.random() * 5)]);
                 this.remotePlayers.set(playerState.userName, circle);
@@ -724,6 +723,7 @@ class GameScene extends Phaser.Scene {
         (0, _webSocJsDefault.default).connect();
     }
     update() {
+        let moved = false;
         // Check if player exists before trying to move it
         if (!this.player) return;
         let speed = 5;

@@ -7,7 +7,7 @@ class GameScene extends Phaser.Scene {
         super("scene-game");
         this.cursors;
         this.player;
-        this.username;
+        this.username="local";
         this.colorsList = [0x4ecdc4, 0xff6b6b, 0xf7b32b, 0x1a535c, 0xb388eb];
         this.remotePlayers = new Map();
     }
@@ -50,12 +50,11 @@ class GameScene extends Phaser.Scene {
 
 
         gameWebSocket.joinedPlayerState = (playerState) => {
-            // console.log(`joined player and creating the player: ${playerState}`);
             console.log("yo ho ho");
 
             console.log(`Username of joined player: ${playerState.userName}`);
             console.log(`Username of local player: ${this.username}`)
-            if (playerState.userName !== this.username) {
+            if (this.username !== "local" && playerState.userName !== this.username) {
                 console.log("Making of the circle")
                 const circle = this.add.circle(
                     playerState.x,
@@ -72,6 +71,9 @@ class GameScene extends Phaser.Scene {
     }
 
     update() {
+
+        let moved = false;
+
         // Check if player exists before trying to move it
         if (!this.player) return;
 

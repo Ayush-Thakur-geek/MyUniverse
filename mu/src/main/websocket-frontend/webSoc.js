@@ -26,21 +26,10 @@ class GameWebSocket {
 
             this.stompClient.subscribe('/app/initial', (message) => {
                 const initialPlayers = JSON.parse(message.body);
-                // Send join message after subscribing
-                // console.log("Sending join message...");
-                // try {
-                //     this.stompClient.send("/app/join", {}, JSON.stringify(message));
-                //     console.log("Join message sent!");
-                // } catch (error) {
-                //     console.error("Error sending join message:", error);
-                // }
                 if (this.initialPlayerState) {
                     this.initialPlayerState(initialPlayers);
                 }
             });
-
-
-
         });
     }
     sendPlayerPosition(position) {
