@@ -684,9 +684,14 @@ class GameWebSocket {
             this.stompClient.subscribe('/topic/player-joined', (message)=>{
                 console.log("player-joined endpoint");
                 const joinedPlayer = JSON.parse(message.body);
-                if (this.joinedPlayerState) {
+                if (this.joinedPlayerState) this.joinedPlayerState(joinedPlayer);
+            });
+            this.stompClient.subscribe('/topic/position', (message)=>{
+                console.log("Movement suspected");
+                const playerMoved = JSON.parse(message.body);
+                if (this.playerMovedState) {
                     console.log("true");
-                    this.joinedPlayerState(joinedPlayer);
+                    this.playerMovedState(playerMoved);
                 } else console.log("false");
             });
             this.stompClient.subscribe('/app/initial', (message)=>{
@@ -695,8 +700,8 @@ class GameWebSocket {
             });
         });
     }
-    sendPlayerPosition(position) {
-        if (this.stompClient && this.stompClient.connected) this.stompClient.send("/app/move", {}, JSON.stringify(position));
+    sendPlayerPosition(playerState) {
+        if (this.stompClient && this.stompClient.connected) this.stompClient.send("/app/move", {}, JSON.stringify(playerState));
     }
 }
 const gameWebSocket = new GameWebSocket();

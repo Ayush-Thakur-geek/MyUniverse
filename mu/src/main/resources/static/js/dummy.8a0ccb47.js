@@ -677,6 +677,7 @@ class GameScene extends Phaser.Scene {
         this.cursors;
         this.player;
         this.username = "local";
+        this.avatarId;
         this.colorsList = [
             0x4ecdc4,
             0xff6b6b,
@@ -691,6 +692,7 @@ class GameScene extends Phaser.Scene {
         this.physics.world.setBounds(0, 0, 800, 600);
         (0, _webSocJsDefault.default).initialPlayerState = (playerState)=>{
             console.log("Initial players data received:", playerState);
+            console.log(`The avatarId: ${playerState.avatarId}`);
             const currentPlayer = playerState.currentPlayer;
             const players = playerState.allPlayers || []; // Fallback to empty array
             // Iterate over `players`, not `playerState`
@@ -700,6 +702,7 @@ class GameScene extends Phaser.Scene {
                 if (player.userName === currentPlayer.userName) {
                     console.log("Current player:", player.userName);
                     this.username = player.userName;
+                    this.avatarId = player.avatarId;
                     this.player = circle;
                     this.physics.add.existing(this.player);
                     this.player.body.setCollideWorldBounds(true);
@@ -711,13 +714,25 @@ class GameScene extends Phaser.Scene {
             });
         };
         (0, _webSocJsDefault.default).joinedPlayerState = (playerState)=>{
-            console.log("yo ho ho");
             console.log(`Username of joined player: ${playerState.userName}`);
             console.log(`Username of local player: ${this.username}`);
             if (this.username !== "local" && playerState.userName !== this.username) {
                 console.log("Making of the circle");
                 const circle = this.add.circle(playerState.x, playerState.y, PLAYER_RADIUS, this.colorsList[Math.floor(Math.random() * 5)]);
                 this.remotePlayers.set(playerState.userName, circle);
+            }
+        };
+        (0, _webSocJsDefault.default).playerMovedState = (playerState)=>{
+            console.log("updating the state of the moved state");
+            let movedUsername = playerState.userName;
+            if (this.username !== "local" && this.username !== movedUsername) {
+                let remotePlayerCircle = this.remotePlayers.get(movedUsername);
+                console.log(`The circle of ${playerState.userName}: ${remotePlayerCircle}`);
+                if (remotePlayerCircle) {
+                    remotePlayerCircle.x = playerState.x;
+                    remotePlayerCircle.y = playerState.y;
+                    console.log(`Updated ${movedPlayerName} position to (${playerState.x}, ${playerState.y})`);
+                } else console.log("Remote player not found");
             }
         };
         (0, _webSocJsDefault.default).connect();
@@ -727,10 +742,33 @@ class GameScene extends Phaser.Scene {
         // Check if player exists before trying to move it
         if (!this.player) return;
         let speed = 5;
-        if (this.cursors.left.isDown) this.player.x -= speed;
-        if (this.cursors.right.isDown) this.player.x += speed;
-        if (this.cursors.up.isDown) this.player.y -= speed;
-        if (this.cursors.down.isDown) this.player.y += speed;
+        if (this.cursors.left.isDown) {
+            moved = true;
+            this.player.x -= speed;
+        }
+        if (this.cursors.right.isDown) {
+            moved = true;
+            this.player.x += speed;
+        }
+        if (this.cursors.up.isDown) {
+            moved = true;
+            this.player.y -= speed;
+        }
+        if (this.cursors.down.isDown) {
+            moved = true;
+            this.player.y += speed;
+        }
+        if (moved) {
+            let newX = this.player.x;
+            let newY = this.player.y;
+            const playerState = {
+                userName: this.username,
+                x: newX,
+                y: newY,
+                avatarId: this.avatarId
+            };
+            (0, _webSocJsDefault.default).sendPlayerPosition(playerState);
+        }
     }
 }
 const config = {

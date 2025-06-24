@@ -17,8 +17,16 @@ class GameWebSocket {
                 console.log("player-joined endpoint")
                 const joinedPlayer = JSON.parse(message.body);
                 if (this.joinedPlayerState) {
-                    console.log("true");
                     this.joinedPlayerState(joinedPlayer);
+                }
+            });
+
+            this.stompClient.subscribe('/topic/position', (message) => {
+                console.log("Movement suspected");
+                const playerMoved = JSON.parse(message.body);
+                if (this.playerMovedState) {
+                    console.log("true");
+                    this.playerMovedState(playerMoved);
                 } else {
                     console.log("false");
                 }
@@ -32,9 +40,9 @@ class GameWebSocket {
             });
         });
     }
-    sendPlayerPosition(position) {
+    sendPlayerPosition(playerState) {
         if (this.stompClient && this.stompClient.connected) {
-            this.stompClient.send("/app/move", {}, JSON.stringify(position))
+            this.stompClient.send("/app/move", {}, JSON.stringify(playerState))
         }
     }
 }

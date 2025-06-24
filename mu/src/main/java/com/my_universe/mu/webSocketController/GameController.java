@@ -69,6 +69,7 @@ public class GameController {
 
     private PlayerState newPlayerState(Principal principal) {
         Random r = new Random();
+        System.out.println("avatarId" + userService.getAvatarId(principal.getName()));
         PlayerState newPlayer = PlayerState.builder()
                 .userName(principal.getName())
                 .x(r.nextInt(500))
