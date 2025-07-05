@@ -15,7 +15,6 @@ public class RoomControllers {
     @Autowired
     private RoomService roomService;
 
-
     @PostMapping("/create-room")
     public String createRoom(
             @ModelAttribute Room room,
@@ -36,14 +35,6 @@ public class RoomControllers {
     ) {
 
         Room room = roomService.getRoom(roomId);
-
-//        if (room == null) {
-//            return "not-found";
-//        }
-//
-//        if (!room.getUsername().equals(principal.getName())) {
-//            return "unauthorized";
-//        }
         System.out.println(room.getSpaceId() + " " + room.getUsername() + " " + room.getRoomName() + " " + room.getCreatedAt());
 
         return "authenticated/canvas";

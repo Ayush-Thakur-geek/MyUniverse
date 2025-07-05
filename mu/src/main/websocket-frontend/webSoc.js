@@ -1,9 +1,15 @@
 import SockJS from 'sockjs-client'
 import {Stomp} from "@stomp/stompjs";
 
+const pathParts = window.location.pathname.split('/');
+const roomId = pathParts[pathParts.length - 1];
+console.log(`room id of this particular room: ${roomId}`);
+
 class GameWebSocket {
+
     constructor() {
         this.stompClient = null;
+        this.roomId = roomId;
     }
 
     connect() {
@@ -13,15 +19,16 @@ class GameWebSocket {
         this.stompClient.connect({}, (frame) => {
             console.log("Connected: ", frame);
 
-            this.stompClient.subscribe('/topic/player-joined', (message) => {
+            this.stompClient.subscribe(`/topic/${this.roomId}/player-joined`, (message) => {
                 console.log("player-joined endpoint")
                 const joinedPlayer = JSON.parse(message.body);
+                this.stompClient.send(`/app/${this.roomId}/join`, {}, JSON.stringify(joinedPlayer));
                 if (this.joinedPlayerState) {
                     this.joinedPlayerState(joinedPlayer);
                 }
             });
 
-            this.stompClient.subscribe('/topic/position', (message) => {
+            this.stompClient.subscribe(`/topic/${roomId}/position`, (message) => {
                 console.log("Movement suspected");
                 const playerMoved = JSON.parse(message.body);
                 if (this.playerMovedState) {
@@ -32,7 +39,7 @@ class GameWebSocket {
                 }
             });
 
-            this.stompClient.subscribe('/app/initial', (message) => {
+            this.stompClient.subscribe(`/app/${roomId}/initial`, (message) => {
                 const initialPlayers = JSON.parse(message.body);
                 if (this.initialPlayerState) {
                     this.initialPlayerState(initialPlayers);
@@ -42,7 +49,7 @@ class GameWebSocket {
     }
     sendPlayerPosition(playerState) {
         if (this.stompClient && this.stompClient.connected) {
-            this.stompClient.send("/app/move", {}, JSON.stringify(playerState))
+            this.stompClient.send(`/app/${this.roomId}/move`, {}, JSON.stringify(playerState))
         }
     }
 }

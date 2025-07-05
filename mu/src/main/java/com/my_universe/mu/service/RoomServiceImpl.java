@@ -34,4 +34,9 @@ public class RoomServiceImpl implements RoomService {
     public Room getRoom(String roomId) {
         return rooms.get(roomId);
     }
+
+    @Override
+    public Room removeRoom(String roomId) {
+        return rooms.remove(roomId);
+    }
 }

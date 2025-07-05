@@ -46,6 +46,7 @@ public class WebSocketEventListner {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
         String username = (String) headerAccessor.getSessionAttributes().get("username");
         String id = (String) headerAccessor.getSessionAttributes().get("id");
+        String roomId = (String) headerAccessor.getSessionAttributes().get("roomId");
         log.info("User disconnected: {}", username);
 
         if (username != null) {
@@ -57,7 +58,7 @@ public class WebSocketEventListner {
         }
 
         if (id != null) {
-            gameStateService.removePlayer(id);
+            gameStateService.removePlayer(roomId, id);
             log.info("Removed player with id: {}", id);
         } else {
             log.warn("Session disconnect: player id was null, could not remove from game state.");

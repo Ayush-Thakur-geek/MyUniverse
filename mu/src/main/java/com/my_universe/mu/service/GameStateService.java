@@ -10,9 +10,9 @@ public interface GameStateService {
 
     void updatePlayerPosition(PlayerState position);
 
-    List<PlayerState> getAllPlayerPositions();
+    List<PlayerState> getAllPlayerPositions(String roomId);
 
-    void removePlayer(String playerId);
+    PlayerState removePlayer(String roomId, String playerId);
 
-    boolean playerExists(String username);
+    boolean playerExists(String roomId, String username);
 }

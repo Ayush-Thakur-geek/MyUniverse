@@ -678,6 +678,7 @@ class GameScene extends Phaser.Scene {
         this.player;
         this.username = "local";
         this.avatarId;
+        this.roomId;
         this.colorsList = [
             0x4ecdc4,
             0xff6b6b,
@@ -691,18 +692,17 @@ class GameScene extends Phaser.Scene {
         console.log("Inside the create method");
         this.physics.world.setBounds(0, 0, 800, 600);
         (0, _webSocJsDefault.default).initialPlayerState = (playerState)=>{
-            console.log("Initial players data received:", playerState);
-            console.log(`The avatarId: ${playerState.avatarId}`);
             const currentPlayer = playerState.currentPlayer;
             const players = playerState.allPlayers || []; // Fallback to empty array
             // Iterate over `players`, not `playerState`
             players.forEach((player)=>{
-                console.log("Processing player:", player.userName);
+                console.log(`Processing player: ${player.userName}, with room id: ${player.roomId}`);
                 const circle = this.add.circle(player.x, player.y, PLAYER_RADIUS, this.colorsList[Math.floor(Math.random() * 5)]);
                 if (player.userName === currentPlayer.userName) {
                     console.log("Current player:", player.userName);
                     this.username = player.userName;
                     this.avatarId = player.avatarId;
+                    this.roomId = player.roomId;
                     this.player = circle;
                     this.physics.add.existing(this.player);
                     this.player.body.setCollideWorldBounds(true);
@@ -765,8 +765,10 @@ class GameScene extends Phaser.Scene {
                 userName: this.username,
                 x: newX,
                 y: newY,
-                avatarId: this.avatarId
+                avatarId: this.avatarId,
+                roomId: this.roomId
             };
+            console.log(`Sending player position: ${playerState.x} & ${playerState.y}, of roomId: ${playerState.roomId}`);
             (0, _webSocJsDefault.default).sendPlayerPosition(playerState);
         }
     }

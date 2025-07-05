@@ -14,6 +14,7 @@ public class PlayerState {
     private float x;
     private float y;
     private String avatarId;
+    private String roomId;
 
     public enum permission {
         MOVE, NOT_MOVE

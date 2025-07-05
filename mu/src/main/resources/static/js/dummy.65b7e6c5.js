@@ -672,21 +672,26 @@ parcelHelpers.defineInteropFlag(exports);
 var _sockjsClient = require("sockjs-client");
 var _sockjsClientDefault = parcelHelpers.interopDefault(_sockjsClient);
 var _stompjs = require("@stomp/stompjs");
+const pathParts = window.location.pathname.split('/');
+const roomId = pathParts[pathParts.length - 1];
+console.log(`room id of this particular room: ${roomId}`);
 class GameWebSocket {
     constructor(){
         this.stompClient = null;
+        this.roomId = roomId;
     }
     connect() {
         const socket = new (0, _sockjsClientDefault.default)('/game-ws');
         this.stompClient = (0, _stompjs.Stomp).over(socket);
         this.stompClient.connect({}, (frame)=>{
             console.log("Connected: ", frame);
-            this.stompClient.subscribe('/topic/player-joined', (message)=>{
+            this.stompClient.subscribe(`/topic/${this.roomId}/player-joined`, (message)=>{
                 console.log("player-joined endpoint");
                 const joinedPlayer = JSON.parse(message.body);
+                this.stompClient.send(`/app/${this.roomId}/join`, {}, JSON.stringify(joinedPlayer));
                 if (this.joinedPlayerState) this.joinedPlayerState(joinedPlayer);
             });
-            this.stompClient.subscribe('/topic/position', (message)=>{
+            this.stompClient.subscribe(`/topic/${roomId}/position`, (message)=>{
                 console.log("Movement suspected");
                 const playerMoved = JSON.parse(message.body);
                 if (this.playerMovedState) {
@@ -694,14 +699,14 @@ class GameWebSocket {
                     this.playerMovedState(playerMoved);
                 } else console.log("false");
             });
-            this.stompClient.subscribe('/app/initial', (message)=>{
+            this.stompClient.subscribe(`/app/${roomId}/initial`, (message)=>{
                 const initialPlayers = JSON.parse(message.body);
                 if (this.initialPlayerState) this.initialPlayerState(initialPlayers);
             });
         });
     }
     sendPlayerPosition(playerState) {
-        if (this.stompClient && this.stompClient.connected) this.stompClient.send("/app/move", {}, JSON.stringify(playerState));
+        if (this.stompClient && this.stompClient.connected) this.stompClient.send(`/app/${this.roomId}/move`, {}, JSON.stringify(playerState));
     }
 }
 const gameWebSocket = new GameWebSocket();

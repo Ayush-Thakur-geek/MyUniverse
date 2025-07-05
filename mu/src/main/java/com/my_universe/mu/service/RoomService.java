@@ -7,4 +7,6 @@ public interface RoomService {
     public Room createRoom(String spaceId, String username, String roomName);
 
     Room getRoom(String roomId);
+
+    Room removeRoom(String roomId);
 }
