@@ -13,6 +13,8 @@
   "description": "",
   "dependencies": {
     "@stomp/stompjs": "^7.1.1",
+    "livekit-client": "^2.15.3",
+    "openvidu-browser": "^2.31.0",
     "sockjs-client": "^1.6.1"
   },
   "devDependencies": {

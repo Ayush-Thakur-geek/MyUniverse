@@ -1,4 +1,5 @@
 import gameWebSocket from './webSoc.js';
+import gameRTC from "./rtc.js";
 
 const PLAYER_RADIUS = 16;
 
@@ -43,11 +44,13 @@ class GameScene extends Phaser.Scene {
                     this.physics.add.existing(this.player);
                     this.player.body.setCollideWorldBounds(true);
                     this.cursors = this.input.keyboard.createCursorKeys();
+                    gameRTC.setReady();
                 } else {
                     console.log("Remote player:", player.userName);
                     this.remotePlayers.set(player.userName, circle);
                 }
             });
+
         };
 
 
@@ -133,6 +136,7 @@ class GameScene extends Phaser.Scene {
             gameWebSocket.sendPlayerPosition(playerState);
         }
     }
+
 }
 
 const config = {
