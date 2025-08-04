@@ -1,5 +1,6 @@
 package com.my_universe.mu.webSocketController;
 
+import com.my_universe.mu.annotations.TimeMonitor;
 import com.my_universe.mu.model.GameMessage;
 import com.my_universe.mu.model.PlayerState;
 import com.my_universe.mu.service.GameStateService;
@@ -60,6 +61,7 @@ public class GameController {
     }
 
     @SubscribeMapping("{roomId}/initial")
+    @TimeMonitor
     public Map<String, Object> sendInitialState(@DestinationVariable String roomId, Principal principal) {
         System.out.println("Subscribe mapping called!");
         PlayerState initialState = newPlayerState(principal, roomId);
