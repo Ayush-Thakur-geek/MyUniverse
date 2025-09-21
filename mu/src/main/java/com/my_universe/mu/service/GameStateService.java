@@ -8,7 +8,7 @@ public interface GameStateService {
 
     void addPlayer(PlayerState playerState);
 
-    void updatePlayerPosition(PlayerState position);
+    boolean updatePlayerPosition(PlayerState position);
 
     List<PlayerState> getAllPlayerPositions(String roomId);
 

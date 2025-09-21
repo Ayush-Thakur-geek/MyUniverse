@@ -38,8 +38,11 @@ public class GameController {
 //    @SendTo("/topic/{roomId}/position")
     public void move(@DestinationVariable String roomId, @Payload PlayerState position) {
         log.info("The movement update request recieved.");
-        gameStateService.updatePlayerPosition(position);
-        messagingTemplate.convertAndSend("/topic/" + roomId + "/position", position);
+        boolean flag = gameStateService.updatePlayerPosition(position);
+        messagingTemplate.convertAndSend("/topic/" + roomId + "/canMove", flag);
+        if (flag) {
+            messagingTemplate.convertAndSend("/topic/" + roomId + "/position", position);
+        }
         log.info("The movements have been sent to /topic/{}/position", roomId);
     }
 

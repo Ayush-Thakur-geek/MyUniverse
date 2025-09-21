@@ -28,6 +28,14 @@ class GameWebSocket {
                 }
             });
 
+            this.stompClient.subscribe(`/topic/${this.roomId}/canMove`, (message) => {
+                const reply = JSON.parse(message.body);
+                console.log("canMove", reply);
+                if (this.onCanMove) {
+                    this.onCanMove(reply);
+                }
+            });
+
             this.stompClient.subscribe(`/topic/${roomId}/position`, (message) => {
                 console.log("Movement suspected");
                 const playerMoved = JSON.parse(message.body);

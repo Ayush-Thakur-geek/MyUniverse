@@ -5,6 +5,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -15,26 +16,139 @@ public class GameStateServiceImpl implements GameStateService {
 
     @Autowired
     private RoomService roomService;
+    private final ConcurrentMap<String, ConcurrentMap<String, PlayerState>> roomPlayerMap;
 
-    private final ConcurrentMap<String, ConcurrentHashMap<String, PlayerState>> roomPlayerMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, List<PlayerState>[][]> roomGridMap;
+
+
+    GameStateServiceImpl() {
+        roomPlayerMap = new ConcurrentHashMap<>();
+        roomGridMap = new ConcurrentHashMap<>();
+//        initializeGrid();
+    }
+    int numBlocksX = 800/100;
+    int numBlocksY = 600/100;
+
+//    private void initializeGrid() {
+//        for (int i = 0; i < numBlocksX; i++) {
+//            for (int j = 0; j < numBlocksY; j++) {
+//                grid[i][j] = new ArrayList<>();
+//            }
+//        }
+//    }
 
     @Override
     public void addPlayer(PlayerState playerState) {
-        ConcurrentMap<String, PlayerState> playerMap =
-                roomPlayerMap.computeIfAbsent(playerState.getRoomId(), k -> new ConcurrentHashMap<>());
+        ConcurrentMap<String, PlayerState> playerMap;
+        List<PlayerState>[][] playerGrid;
+        String roomId = playerState.getRoomId();
+        if (roomPlayerMap.containsKey(playerState.getRoomId())) {
+            playerMap = roomPlayerMap.get(roomId);
+            playerGrid = roomGridMap.get(roomId);
+        } else {
+            playerMap = new ConcurrentHashMap<>();
+            playerGrid = new ArrayList[numBlocksX][numBlocksY];
+            for (int i = 0; i < numBlocksX; i++) {
+                for (int j = 0; j < numBlocksY; j++) {
+                    playerGrid[i][j] = new ArrayList<>();
+                }
+            }
+        }
         playerMap.put(playerState.getUserName(), playerState);
+
+        float x = playerState.getX();
+        float y = playerState.getY();
+        int i = (int) Math.floor(x/100);
+        int j = (int) Math.floor(y/100);
+        i = Math.max(0, Math.min(numBlocksX - 1, i));
+        j = Math.max(0, Math.min(numBlocksY - 1, j));
+        playerGrid[i][j].add(playerState);
+        roomGridMap.put(roomId, playerGrid);
+        roomPlayerMap.put(roomId, playerMap);
         log.info("Player " + playerState.getUserName() + " added to room " + playerState.getRoomId());
     }
 
 
     @Override
-    public void updatePlayerPosition(PlayerState position) {
-        if (roomPlayerMap.containsKey(position.getRoomId())) {
-            ConcurrentMap<String, PlayerState> players = roomPlayerMap.get(position.getRoomId());
-            players.put(position.getUserName(), position);
-            log.info("Player " + position.getUserName() + " updated to " + position);
-        } else log.info("Player " + position.getUserName() + " not found");
-        log.info("The positions updated keeping in consideration the roomId");
+    public boolean updatePlayerPosition(PlayerState position) {
+        if (!roomPlayerMap.containsKey(position.getRoomId())) {
+            log.info("Room " + position.getRoomId() + " not found");
+            return false;
+        }
+
+        ConcurrentMap<String, PlayerState> players = roomPlayerMap.get(position.getRoomId());
+        List<PlayerState>[][] grid = roomGridMap.get(position.getRoomId());
+        String userName = position.getUserName();
+
+        if (!players.containsKey(userName)) {
+            log.info("Player " + userName + " not found in room " + position.getRoomId());
+            return false;
+        }
+
+        PlayerState playerState = players.get(userName);
+        float oldX = playerState.getX();
+        float oldY = playerState.getY();
+        float newX = position.getX();
+        float newY = position.getY();
+
+        // Calculate grid positions
+        int oldI = (int) Math.floor(oldX / 100);
+        int oldJ = (int) Math.floor(oldY / 100);
+        int newI = (int) Math.floor(newX / 100);
+        int newJ = (int) Math.floor(newY / 100);
+
+        // Clamp grid indices to valid bounds
+        newI = Math.max(0, Math.min(numBlocksX - 1, newI));
+        newJ = Math.max(0, Math.min(numBlocksY - 1, newJ));
+
+        // Also clamp actual coordinates to world bounds (optional but recommended)
+        // newX = Math.max(PLAYER_RADIUS, Math.min(WORLD_WIDTH - PLAYER_RADIUS, newX));
+        // newY = Math.max(PLAYER_RADIUS, Math.min(WORLD_HEIGHT - PLAYER_RADIUS, newY));
+
+        // Check for collisions in the NEW grid cell and adjacent cells
+        final float MINIMUM_DISTANCE = 32.0f; // 16px radius * 2
+        final int GRID_SIZE = 100;
+
+        // Check current cell and adjacent cells (9 cells total in 3x3 grid)
+        for (int di = -1; di <= 1; di++) {
+            for (int dj = -1; dj <= 1; dj++) {
+                int checkI = newI + di;
+                int checkJ = newJ + dj;
+
+                // Skip if out of bounds
+                if (checkI < 0 || checkI >= numBlocksX || checkJ < 0 || checkJ >= numBlocksY) {
+                    continue;
+                }
+
+                List<PlayerState> playersInCell = grid[checkI][checkJ];
+
+                for (PlayerState neighbourPlayerState : playersInCell) {
+                    // Don't check collision against self
+                    if (!neighbourPlayerState.getUserName().equals(userName)) {
+                        float dx = neighbourPlayerState.getX() - newX;
+                        float dy = neighbourPlayerState.getY() - newY;
+                        float distance = (float) Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance < MINIMUM_DISTANCE) {
+                            log.info("Collision detected: Player " + userName + " too close to " + neighbourPlayerState.getUserName() + " (distance: " + distance + ")");
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Update player position
+        players.put(userName, position);
+
+        // Remove from old grid cell
+        grid[oldI][oldJ].remove(playerState);
+
+        // Add to new grid cell
+        grid[newI][newJ].add(position);
+
+        log.info("Player " + userName + " moved from (" + oldX + "," + oldY + ") to (" + newX + "," + newY + ")");
+        return true;
     }
 
     @Override

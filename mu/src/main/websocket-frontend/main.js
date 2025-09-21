@@ -1,5 +1,5 @@
 import gameWebSocket from './webSoc.js';
-import gameRTC from "./rtc.js";
+// import gameRTC from "./rtc.js";
 
 const PLAYER_RADIUS = 16;
 
@@ -13,6 +13,7 @@ class GameScene extends Phaser.Scene {
         this.roomId;
         this.colorsList = [0x4ecdc4, 0xff6b6b, 0xf7b32b, 0x1a535c, 0xb388eb];
         this.remotePlayers = new Map();
+        this.movePending = false;
     }
 
     create() {
@@ -44,7 +45,6 @@ class GameScene extends Phaser.Scene {
                     this.physics.add.existing(this.player);
                     this.player.body.setCollideWorldBounds(true);
                     this.cursors = this.input.keyboard.createCursorKeys();
-                    gameRTC.setReady();
                 } else {
                     console.log("Remote player:", player.userName);
                     this.remotePlayers.set(player.userName, circle);
@@ -83,56 +83,62 @@ class GameScene extends Phaser.Scene {
                 if (remotePlayerCircle) {
                     remotePlayerCircle.x = playerState.x;
                     remotePlayerCircle.y = playerState.y;
-                    console.log(`Updated ${movedPlayerName} position to (${playerState.x}, ${playerState.y})`);
+                    console.log(`Updated ${movedUsername} position to (${playerState.x}, ${playerState.y})`);
                 } else {
                     console.log("Remote player not found");
                 }
             }
 
         }
+        // Fix 3: Enhanced onCanMove callback
+        gameWebSocket.onCanMove = (allowed) => {
+            this.movePending = false;
 
+            if (!allowed) {
+                console.log("Move not allowed, reverting position");
+                // Move not allowed: revert to previous position
+                this.player.x = this.prevPlayerX;
+                this.player.y = this.prevPlayerY;
+            } else {
+                console.log("Move allowed, position confirmed");
+                // Position is already updated optimistically, no need to move again
+            }
+        };
 
         gameWebSocket.connect();
     }
 
     update() {
-
-        let moved = false;
-
-        // Check if player exists before trying to move it
         if (!this.player) return;
-
+        let moved = false;
+        let x = this.player.x;
+        let y = this.player.y;
         let speed = 5;
 
-        if (this.cursors.left.isDown) {
-            moved = true;
-            this.player.x -= speed;
-        }
-        if (this.cursors.right.isDown) {
-            moved = true;
-            this.player.x += speed;
-        }
-        if (this.cursors.up.isDown) {
-            moved = true;
-            this.player.y -= speed;
-        }
-        if (this.cursors.down.isDown) {
-            moved = true;
-            this.player.y += speed;
-        }
+        if (this.cursors.left.isDown)  { x -= speed; moved = true; }
+        if (this.cursors.right.isDown) { x += speed; moved = true; }
+        if (this.cursors.up.isDown)    { y -= speed; moved = true; }
+        if (this.cursors.down.isDown)  { y += speed; moved = true; }
 
-        if (moved) {
-            let newX = this.player.x;
-            let newY = this.player.y;
+        if (moved && !this.movePending) {
+            // Store previous position for potential revert
+            this.prevPlayerX = this.player.x;
+            this.prevPlayerY = this.player.y;
+            this.movePending = true;
+
+            // Move optimistically for smooth gameplay
+            this.player.x = x;
+            this.player.y = y;
 
             const playerState = {
                 userName: this.username,
-                x: newX,
-                y: newY,
+                x: x,
+                y: y,
                 avatarId: this.avatarId,
                 roomId: this.roomId
             };
-            console.log(`Sending player position: ${playerState.x} & ${playerState.y}, of roomId: ${playerState.roomId}`)
+
+            console.log(`Sending player state:`, playerState);
             gameWebSocket.sendPlayerPosition(playerState);
         }
     }
@@ -154,4 +160,5 @@ const config = {
     scene: [GameScene]
 };
 
-new Phaser.Game(config);
+const gameScene = new Phaser.Game(config);
+export default gameScene;
