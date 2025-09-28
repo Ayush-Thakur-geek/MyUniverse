@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Service
 @Log4j2
@@ -20,6 +22,8 @@ public class GameStateServiceImpl implements GameStateService {
     private final ConcurrentMap<String, List<PlayerState>[][]> roomGridMap;
 
     private final ConcurrentMap<String, ConcurrentMap<String, Set<String>>> roomProximityMap;
+
+    ExecutorService executor = Executors.newFixedThreadPool(10);
 
     GameStateServiceImpl(RoomService roomService) {
         this.roomService = roomService;
@@ -148,7 +152,10 @@ public class GameStateServiceImpl implements GameStateService {
         // Add to new grid cell
         grid[newI][newJ].add(position);
 
-        Thread t = new Thread(() -> {
+//        Thread t = new Thread(() -> {
+//            handleProximityChanges(position.getRoomId(), userName, currentProximityPlayers);
+//        });
+        executor.submit(() -> {
             handleProximityChanges(position.getRoomId(), userName, currentProximityPlayers);
         });
 

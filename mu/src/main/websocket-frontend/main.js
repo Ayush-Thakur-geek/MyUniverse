@@ -1,5 +1,5 @@
 import gameWebSocket from './webSoc.js';
-// import gameRTC from "./rtc.js";
+import PhaserVideoManager from './PhaserVideoManager.js';
 
 const PLAYER_RADIUS = 16;
 
@@ -14,6 +14,8 @@ class GameScene extends Phaser.Scene {
         this.colorsList = [0x4ecdc4, 0xff6b6b, 0xf7b32b, 0x1a535c, 0xb388eb];
         this.remotePlayers = new Map();
         this.movePending = false;
+        this.videoManager = null;
+        this.videoSessionActive = false;
     }
 
     create() {
