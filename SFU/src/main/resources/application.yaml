@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: SFU
+
+server:
+  port: 8089

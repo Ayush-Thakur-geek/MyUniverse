@@ -5,8 +5,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -14,28 +13,22 @@ import java.util.concurrent.ConcurrentMap;
 @Log4j2
 public class GameStateServiceImpl implements GameStateService {
 
-    @Autowired
-    private RoomService roomService;
+    private final RoomService roomService;
+
     private final ConcurrentMap<String, ConcurrentMap<String, PlayerState>> roomPlayerMap;
 
     private final ConcurrentMap<String, List<PlayerState>[][]> roomGridMap;
 
+    private final ConcurrentMap<String, ConcurrentMap<String, Set<String>>> roomProximityMap;
 
-    GameStateServiceImpl() {
+    GameStateServiceImpl(RoomService roomService) {
+        this.roomService = roomService;
         roomPlayerMap = new ConcurrentHashMap<>();
         roomGridMap = new ConcurrentHashMap<>();
-//        initializeGrid();
+        roomProximityMap = new ConcurrentHashMap<>();
     }
     int numBlocksX = 800/100;
     int numBlocksY = 600/100;
-
-//    private void initializeGrid() {
-//        for (int i = 0; i < numBlocksX; i++) {
-//            for (int j = 0; j < numBlocksY; j++) {
-//                grid[i][j] = new ArrayList<>();
-//            }
-//        }
-//    }
 
     @Override
     public void addPlayer(PlayerState playerState) {
@@ -109,6 +102,12 @@ public class GameStateServiceImpl implements GameStateService {
         final float MINIMUM_DISTANCE = 32.0f; // 16px radius * 2
         final int GRID_SIZE = 100;
 
+        //Check for proximity of the players
+        final float PROXIMITY_DISTANCE = 60.0F;
+
+        Set<String> currentProximityPlayers = new HashSet<>();
+        boolean collisionDetected = false;
+
         // Check current cell and adjacent cells (9 cells total in 3x3 grid)
         for (int di = -1; di <= 1; di++) {
             for (int dj = -1; dj <= 1; dj++) {
@@ -132,6 +131,8 @@ public class GameStateServiceImpl implements GameStateService {
                         if (distance < MINIMUM_DISTANCE) {
                             log.info("Collision detected: Player " + userName + " too close to " + neighbourPlayerState.getUserName() + " (distance: " + distance + ")");
                             return false;
+                        } else if (distance < PROXIMITY_DISTANCE) {
+                            currentProximityPlayers.add(neighbourPlayerState.getUserName());
                         }
                     }
                 }
@@ -147,8 +148,45 @@ public class GameStateServiceImpl implements GameStateService {
         // Add to new grid cell
         grid[newI][newJ].add(position);
 
+        Thread t = new Thread(() -> {
+            handleProximityChanges(position.getRoomId(), userName, currentProximityPlayers);
+        });
+
+
+
         log.info("Player " + userName + " moved from (" + oldX + "," + oldY + ") to (" + newX + "," + newY + ")");
         return true;
+    }
+
+    private void handleProximityChanges(String roomId, String userName, Set<String> currentProximityPlayers) {
+        ConcurrentMap<String, Set<String>> roomProximity = roomProximityMap.get(roomId);
+        Set<String> previousProximityPlayers = roomProximity.getOrDefault(userName, new HashSet<>());
+
+        Set<String> newProximityPlayers = new HashSet<>(currentProximityPlayers);
+        newProximityPlayers.removeAll(previousProximityPlayers);
+
+        Set<String> leavingPlayers = new HashSet<>(previousProximityPlayers);
+        leavingPlayers.removeAll(currentProximityPlayers);
+
+        roomProximity.put(userName, newProximityPlayers);
+
+        if (!newProximityPlayers.isEmpty() || !leavingPlayers.isEmpty()) {
+            sendProximityUpdates(roomId, userName, newProximityPlayers, leavingPlayers);
+        }
+    }
+//
+    private void sendProximityUpdates(String roomId,
+                                      String userName,
+                                      Set<String> newProximityPlayers,
+                                      Set<String> leavingPlayers) {
+        Map<String, Object> proximityUpdate = new HashMap<>();
+        proximityUpdate.put("type", "video-proximity-update");
+        proximityUpdate.put("userName", userName);
+        proximityUpdate.put("newProximityPlayers", newProximityPlayers);
+        proximityUpdate.put("leavingPlayers", leavingPlayers);
+        proximityUpdate.put("timestamp", System.currentTimeMillis());
+
+
     }
 
     @Override
