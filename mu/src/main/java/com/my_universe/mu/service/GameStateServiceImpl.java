@@ -3,6 +3,7 @@ package com.my_universe.mu.service;
 import com.my_universe.mu.model.PlayerState;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -23,13 +24,16 @@ public class GameStateServiceImpl implements GameStateService {
 
     private final ConcurrentMap<String, ConcurrentMap<String, Set<String>>> roomProximityMap;
 
+    private final SimpMessagingTemplate messagingTemplate;
+
     ExecutorService executor = Executors.newFixedThreadPool(10);
 
-    GameStateServiceImpl(RoomService roomService) {
+    GameStateServiceImpl(RoomService roomService, SimpMessagingTemplate messagingTemplate) {
         this.roomService = roomService;
         roomPlayerMap = new ConcurrentHashMap<>();
         roomGridMap = new ConcurrentHashMap<>();
         roomProximityMap = new ConcurrentHashMap<>();
+        this.messagingTemplate = messagingTemplate;
     }
     int numBlocksX = 800/100;
     int numBlocksY = 600/100;
@@ -193,7 +197,39 @@ public class GameStateServiceImpl implements GameStateService {
         proximityUpdate.put("leavingPlayers", leavingPlayers);
         proximityUpdate.put("timestamp", System.currentTimeMillis());
 
+        // Send to the specific user
+        messagingTemplate.convertAndSendToUser(userName, "/queue/" + roomId + "/video-proximity", proximityUpdate);
 
+        // Also notify the users who are entering/leaving proximity
+        for (String otherUser : newProximityPlayers) {
+            Map<String, Object> reverseUpdate = new HashMap<>();
+            reverseUpdate.put("type", "video-proximity-update");
+            reverseUpdate.put("targetUser", otherUser);
+            reverseUpdate.put("enteringUsers", Set.of(userName));
+            reverseUpdate.put("leavingUsers", Collections.emptySet());
+            reverseUpdate.put("timestamp", System.currentTimeMillis());
+
+            messagingTemplate.convertAndSendToUser(otherUser, "/queue/" + roomId + "/video-proximity", reverseUpdate);
+        }
+
+        for (String otherUser : leavingPlayers) {
+            Map<String, Object> reverseUpdate = new HashMap<>();
+            reverseUpdate.put("type", "video-proximity-update");
+            reverseUpdate.put("targetUser", otherUser);
+            reverseUpdate.put("enteringUsers", Collections.emptySet());
+            reverseUpdate.put("leavingUsers", Set.of(userName));
+            reverseUpdate.put("timestamp", System.currentTimeMillis());
+
+            messagingTemplate.convertAndSendToUser(otherUser, "/queue/" + roomId + "/video-proximity", reverseUpdate);
+        }
+
+        log.info("Proximity update sent for user {} in room {}: entering={}, leaving={}",
+                userName, roomId, newProximityPlayers, leavingPlayers);
+    }
+
+    @Override
+    public Map<String, Object> createVideoSession(String roomId, String userName) {
+        return null;
     }
 
     @Override

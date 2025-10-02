@@ -25,14 +25,21 @@ import java.util.Random;
 @Log4j2
 public class GameController {
 
-    @Autowired
-    private SimpMessagingTemplate messagingTemplate;
+    private final SimpMessagingTemplate messagingTemplate;
 
-    @Autowired
-    private GameStateService gameStateService;
+    private final GameStateService gameStateService;
 
-    @Autowired
-    private UserService userService;
+    private final UserService userService;
+
+    GameController(
+            SimpMessagingTemplate messagingTemplate,
+            GameStateService gameStateService,
+            UserService userService
+    ) {
+        this.messagingTemplate = messagingTemplate;
+        this.gameStateService = gameStateService;
+        this.userService = userService;
+    }
 
     @MessageMapping("/{roomId}/move")
 //    @SendTo("/topic/{roomId}/position")
@@ -61,6 +68,33 @@ public class GameController {
         headerAccessor.getSessionAttributes().put("username", playerState.getUserName());
         headerAccessor.getSessionAttributes().put("id", playerState.getUserName());
         headerAccessor.getSessionAttributes().put("roomId", roomId);
+    }
+
+    @MessageMapping("{roomId}/request-video-session")
+    public void requestVideoSession(
+            @DestinationVariable String roomId,
+            @Payload PlayerState playerState,
+            Principal principal
+    ) {
+        String userName = principal.getName();
+        log.info("Video session requested by {} in room {}", userName, roomId);
+        try {
+            Map<String, Object> videoSessionData = gameStateService.createVideoSession(roomId, userName);
+
+            // Send video session info to the requesting user
+            messagingTemplate.convertAndSendToUser(userName, "/queue/" + roomId + "/video-session", videoSessionData);
+
+            log.info("Video session data sent to user {} in room {}", userName, roomId);
+
+        } catch (Exception e) {
+            log.error("Failed to create video session for user {} in room {}", userName, roomId, e);
+
+            Map<String, Object> errorResponse = Map.of(
+                    "success", false,
+                    "error", "Failed to create video session: " + e.getMessage()
+            );
+            messagingTemplate.convertAndSendToUser(userName, "/queue/" + roomId + "/video-session", errorResponse);
+        }
     }
 
     @SubscribeMapping("{roomId}/initial")

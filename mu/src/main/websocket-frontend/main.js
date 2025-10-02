@@ -19,7 +19,11 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
-        console.log("Inside the create method")
+        console.log("Inside the create method");
+
+        // Initialize video manager
+        this.videoManager = new PhaserVideoManager(this);
+        gameWebSocket.setVideoManager(this.videoManager);
 
         this.physics.world.setBounds(0, 0, 800, 600);
 
@@ -107,7 +111,98 @@ class GameScene extends Phaser.Scene {
             }
         };
 
+        // Video-related callbacks
+        gameWebSocket.onVideoSession = (videoSessionData) => {
+            if (videoSessionData.success) {
+                this.initializeVideoSession(videoSessionData);
+            } else {
+                console.error("Failed to get video session:", videoSessionData.error);
+            }
+        };
+
+        gameWebSocket.onVideoProximityUpdate = (proximityUpdate) => {
+            if (proximityUpdate.targetUser === this.username) {
+                if (proximityUpdate.enteringUsers.length > 0) {
+                    console.log("Users entering proximity:", proximityUpdate.enteringUsers);
+                    this.videoManager.handleUsersEnterProximity(proximityUpdate.enteringUsers);
+                }
+                if (proximityUpdate.leavingUsers.length > 0) {
+                    console.log("Users leaving proximity:", proximityUpdate.leavingUsers);
+                    this.videoManager.handleUsersLeaveProximity(proximityUpdate.leavingUsers);
+                }
+            }
+        };
+
+        gameWebSocket.onPlayerLeft = (leftPlayer) => {
+            console.log("Player left the game:", leftPlayer.userName);
+
+            // Remove from remote players
+            const playerCircle = this.remotePlayers.get(leftPlayer.userName);
+            if (playerCircle) {
+                playerCircle.destroy();
+                this.remotePlayers.delete(leftPlayer.userName);
+            }
+
+            // Remove from video manager
+            if (this.videoManager) {
+                this.videoManager.removeUser(leftPlayer.userName);
+            }
+        };
+
+        // Setup keyboard controls for video
+        this.setupVideoControls();
+
         gameWebSocket.connect();
+    }
+
+    async initializeVideoSession(videoSessionData) {
+        try {
+            const success = await this.videoManager.initializeSession(
+                videoSessionData.sessionId,
+                videoSessionData.token,
+                this.username
+            );
+
+            if (success) {
+                this.videoSessionActive = true;
+                this.updateUIStatus('🟢 Video Connected');
+                console.log('Video session initialized in game scene');
+            } else {
+                this.updateUIStatus('🔴 Video Failed');
+            }
+
+        } catch (error) {
+            console.error('Failed to initialize video session in game scene:', error);
+            this.updateUIStatus('🔴 Video Error');
+        }
+    }
+
+    setupVideoControls() {
+        // V key to toggle video
+        this.input.keyboard.on('keydown-V', () => {
+            if (this.videoManager) {
+                const videoOn = this.videoManager.toggleVideo();
+                console.log('Video toggled:', videoOn ? 'ON' : 'OFF');
+                this.updateVideoButton(videoOn);
+            }
+        });
+
+        // M key to toggle audio
+        this.input.keyboard.on('keydown-M', () => {
+            if (this.videoManager) {
+                const audioOn = this.videoManager.toggleAudio();
+                console.log('Audio toggled:', audioOn ? 'ON' : 'OFF');
+                this.updateAudioButton(audioOn);
+            }
+        });
+
+        // R key to request new video session (for debugging)
+        this.input.keyboard.on('keydown-R', () => {
+            if (!this.videoSessionActive) {
+                console.log('Requesting video session...');
+                gameWebSocket.requestVideoSession();
+            }
+        });
     }
 
     update() {

@@ -671,7 +671,8 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _webSocJs = require("./webSoc.js");
 var _webSocJsDefault = parcelHelpers.interopDefault(_webSocJs);
-// import gameRTC from "./rtc.js";
+var _phaserVideoManagerJs = require("./PhaserVideoManager.js");
+var _phaserVideoManagerJsDefault = parcelHelpers.interopDefault(_phaserVideoManagerJs);
 const PLAYER_RADIUS = 16;
 class GameScene extends Phaser.Scene {
     constructor(){
@@ -690,9 +691,14 @@ class GameScene extends Phaser.Scene {
         ];
         this.remotePlayers = new Map();
         this.movePending = false;
+        this.videoManager = null;
+        this.videoSessionActive = false;
     }
     create() {
         console.log("Inside the create method");
+        // Initialize video manager
+        this.videoManager = new (0, _phaserVideoManagerJsDefault.default)(this);
+        (0, _webSocJsDefault.default).setVideoManager(this.videoManager);
         this.physics.world.setBounds(0, 0, 800, 600);
         (0, _webSocJsDefault.default).initialPlayerState = (playerState)=>{
             const currentPlayer = playerState.currentPlayer;
@@ -748,7 +754,75 @@ class GameScene extends Phaser.Scene {
                 this.player.y = this.prevPlayerY;
             } else console.log("Move allowed, position confirmed");
         };
+        // Video-related callbacks
+        (0, _webSocJsDefault.default).onVideoSession = (videoSessionData)=>{
+            if (videoSessionData.success) this.initializeVideoSession(videoSessionData);
+            else console.error("Failed to get video session:", videoSessionData.error);
+        };
+        (0, _webSocJsDefault.default).onVideoProximityUpdate = (proximityUpdate)=>{
+            if (proximityUpdate.targetUser === this.username) {
+                if (proximityUpdate.enteringUsers.length > 0) {
+                    console.log("Users entering proximity:", proximityUpdate.enteringUsers);
+                    this.videoManager.handleUsersEnterProximity(proximityUpdate.enteringUsers);
+                }
+                if (proximityUpdate.leavingUsers.length > 0) {
+                    console.log("Users leaving proximity:", proximityUpdate.leavingUsers);
+                    this.videoManager.handleUsersLeaveProximity(proximityUpdate.leavingUsers);
+                }
+            }
+        };
+        (0, _webSocJsDefault.default).onPlayerLeft = (leftPlayer)=>{
+            console.log("Player left the game:", leftPlayer.userName);
+            // Remove from remote players
+            const playerCircle = this.remotePlayers.get(leftPlayer.userName);
+            if (playerCircle) {
+                playerCircle.destroy();
+                this.remotePlayers.delete(leftPlayer.userName);
+            }
+            // Remove from video manager
+            if (this.videoManager) this.videoManager.removeUser(leftPlayer.userName);
+        };
+        // Setup keyboard controls for video
+        this.setupVideoControls();
         (0, _webSocJsDefault.default).connect();
+    }
+    async initializeVideoSession(videoSessionData) {
+        try {
+            const success = await this.videoManager.initializeSession(videoSessionData.sessionId, videoSessionData.token, this.username);
+            if (success) {
+                this.videoSessionActive = true;
+                this.updateUIStatus("\uD83D\uDFE2 Video Connected");
+                console.log('Video session initialized in game scene');
+            } else this.updateUIStatus("\uD83D\uDD34 Video Failed");
+        } catch (error) {
+            console.error('Failed to initialize video session in game scene:', error);
+            this.updateUIStatus("\uD83D\uDD34 Video Error");
+        }
+    }
+    setupVideoControls() {
+        // V key to toggle video
+        this.input.keyboard.on('keydown-V', ()=>{
+            if (this.videoManager) {
+                const videoOn = this.videoManager.toggleVideo();
+                console.log('Video toggled:', videoOn ? 'ON' : 'OFF');
+                this.updateVideoButton(videoOn);
+            }
+        });
+        // M key to toggle audio
+        this.input.keyboard.on('keydown-M', ()=>{
+            if (this.videoManager) {
+                const audioOn = this.videoManager.toggleAudio();
+                console.log('Audio toggled:', audioOn ? 'ON' : 'OFF');
+                this.updateAudioButton(audioOn);
+            }
+        });
+        // R key to request new video session (for debugging)
+        this.input.keyboard.on('keydown-R', ()=>{
+            if (!this.videoSessionActive) {
+                console.log('Requesting video session...');
+                (0, _webSocJsDefault.default).requestVideoSession();
+            }
+        });
     }
     update() {
         if (!this.player) return;
@@ -811,7 +885,7 @@ const config = {
 const gameScene = new Phaser.Game(config);
 exports.default = gameScene;
 
-},{"./webSoc.js":"abkGa","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"abkGa":[function(require,module,exports,__globalThis) {
+},{"./webSoc.js":"abkGa","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","./PhaserVideoManager.js":"3mkD2"}],"abkGa":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _sockjsClient = require("sockjs-client");
@@ -849,6 +923,22 @@ class GameWebSocket {
                     this.playerMovedState(playerMoved);
                 } else console.log("false");
             });
+            // New video-related subscriptions
+            this.stompClient.subscribe(`/user/queue/${this.roomId}/video-session`, (message)=>{
+                const videoSessionData = JSON.parse(message.body);
+                console.log("Video session data received:", videoSessionData);
+                if (this.onVideoSession) this.onVideoSession(videoSessionData);
+            });
+            this.stompClient.subscribe(`/user/queue/${this.roomId}/video-proximity`, (message)=>{
+                const proximityUpdate = JSON.parse(message.body);
+                console.log("Video proximity update:", proximityUpdate);
+                if (this.onVideoProximityUpdate) this.onVideoProximityUpdate(proximityUpdate);
+            });
+            this.stompClient.subscribe(`/topic/${this.roomId}/player-left`, (message)=>{
+                const leftPlayer = JSON.parse(message.body);
+                console.log("Player left:", leftPlayer);
+                if (this.onPlayerLeft) this.onPlayerLeft(leftPlayer);
+            });
             this.stompClient.subscribe(`/app/${roomId}/initial`, (message)=>{
                 const initialPlayers = JSON.parse(message.body);
                 if (this.initialPlayerState) this.initialPlayerState(initialPlayers);
@@ -857,6 +947,18 @@ class GameWebSocket {
     }
     sendPlayerPosition(playerState) {
         if (this.stompClient && this.stompClient.connected) this.stompClient.send(`/app/${this.roomId}/move`, {}, JSON.stringify(playerState));
+    }
+    requestVideoSession() {
+        if (this.stompClient && this.stompClient.connected) this.stompClient.send(`/app/${this.roomId}/request-video-session`, {}, JSON.stringify({}));
+    }
+    setVideoManager(videoManager) {
+        this.videoManager = videoManager;
+    }
+    setCurrentUser(username) {
+        this.currentUser = username;
+    }
+    disconnect() {
+        if (this.stompClient) this.stompClient.disconnect();
     }
 }
 const gameWebSocket = new GameWebSocket();
@@ -6349,6 +6451,243 @@ exports.export = function(dest, destName, get) {
     });
 };
 
-},{}]},["fhBSv","bNJxx"], "bNJxx", "parcelRequirebeba", {})
+},{}],"3mkD2":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+class PhaserVideoManager {
+    constructor(gameScene){
+        this.gameScene = gameScene;
+        this.session = null;
+        this.publisher = null;
+        this.subscribers = new Map(); // userId -> subscriber
+        this.userPositions = new Map(); // userId -> {x, y}
+        this.proximityRadius = 60; // pixels
+        this.localUserId = null;
+        this.videoElements = new Map(); // userId -> video container element
+    }
+    async initializeSession(sessionId, token, userId) {
+        this.localUserId = userId;
+        try {
+            // Initialize OpenVidu session
+            this.session = new OpenVidu().initSession();
+            // Set up event handlers
+            this.setupEventHandlers();
+            // Connect to session
+            await this.session.connect(token, {
+                userId: userId,
+                roomId: this.gameScene.roomId
+            });
+            // Publish own video stream
+            await this.publishStream();
+            console.log('Video session initialized successfully');
+            return true;
+        } catch (error) {
+            console.error('Error initializing video session:', error);
+            return false;
+        }
+    }
+    setupEventHandlers() {
+        // When a new user joins and starts publishing
+        this.session.on('streamCreated', (event)=>{
+            console.log('New stream created:', event.stream.connection.data);
+        // Don't auto-subscribe - wait for proximity signal
+        });
+        // When a user leaves or stops publishing
+        this.session.on('streamDestroyed', (event)=>{
+            console.log('Stream destroyed:', event.stream.connection.data);
+            const userData = JSON.parse(event.stream.connection.data);
+            this.unsubscribeFromUser(userData.userId);
+        });
+        // Connection events
+        this.session.on('connectionCreated', (event)=>{
+            console.log('User connected:', event.connection.data);
+        });
+        this.session.on('connectionDestroyed', (event)=>{
+            console.log('User disconnected:', event.connection.data);
+            const userData = JSON.parse(event.connection.data);
+            this.removeUser(userData.userId);
+        });
+        this.session.on('exception', (event)=>{
+            console.error('OpenVidu exception:', event);
+        });
+    }
+    async publishStream() {
+        try {
+            // Create publisher with video and audio
+            this.publisher = await OpenVidu.getUserMedia({
+                videoSource: undefined,
+                audioSource: undefined,
+                publishAudio: true,
+                publishVideo: true,
+                resolution: '320x240',
+                frameRate: 15 // Lower framerate for performance
+            });
+            this.publisher = this.session.publish(this.publisher);
+            // Add local video to DOM
+            this.createLocalVideoElement();
+        } catch (error) {
+            console.error('Error publishing stream:', error);
+        }
+    }
+    createLocalVideoElement() {
+        const localVideoContainer = document.getElementById('local-video-container');
+        if (localVideoContainer && this.publisher) {
+            this.publisher.addVideoElement(localVideoContainer);
+            console.log('Local video element created');
+        }
+    }
+    handleUsersEnterProximity(userIds) {
+        userIds.forEach((userId)=>{
+            const stream = this.findStreamByUserId(userId);
+            if (stream && !this.subscribers.has(userId)) {
+                console.log('Subscribing to user in proximity:', userId);
+                this.subscribeToStream(stream, userId);
+            }
+        });
+    }
+    handleUsersLeaveProximity(userIds) {
+        userIds.forEach((userId)=>{
+            this.unsubscribeFromUser(userId);
+        });
+    }
+    subscribeToStream(stream, userId) {
+        try {
+            const subscriber = this.session.subscribe(stream);
+            this.subscribers.set(userId, subscriber);
+            // Create video element positioned near the player in the game
+            this.createRemoteVideoElement(userId, subscriber);
+            console.log('Subscribed to stream for user:', userId);
+        } catch (error) {
+            console.error('Error subscribing to stream:', error);
+        }
+    }
+    unsubscribeFromUser(userId) {
+        if (this.subscribers.has(userId)) {
+            console.log('Unsubscribing from user leaving proximity:', userId);
+            const subscriber = this.subscribers.get(userId);
+            this.session.unsubscribe(subscriber);
+            this.subscribers.delete(userId);
+            this.removeVideoElement(userId);
+        }
+    }
+    createRemoteVideoElement(userId, subscriber) {
+        // Get player position from the game scene
+        const playerCircle = this.gameScene.remotePlayers.get(userId);
+        if (!playerCircle) {
+            console.warn('Player circle not found for user:', userId);
+            return;
+        }
+        // Create video container
+        const videoContainer = document.createElement('div');
+        videoContainer.id = `video-${userId}`;
+        videoContainer.className = 'remote-video-container';
+        videoContainer.style.position = 'absolute';
+        videoContainer.style.width = '120px';
+        videoContainer.style.height = '90px';
+        videoContainer.style.border = '2px solid #00ff00';
+        videoContainer.style.borderRadius = '8px';
+        videoContainer.style.overflow = 'hidden';
+        videoContainer.style.zIndex = '1000';
+        videoContainer.style.pointerEvents = 'none';
+        // Position near the player's game position
+        const gameContainer = document.getElementById('game-container');
+        const gameRect = gameContainer.getBoundingClientRect();
+        // Position video above the player circle
+        videoContainer.style.left = `${playerCircle.x - 60}px`;
+        videoContainer.style.top = `${playerCircle.y - 120}px`;
+        // Add username label
+        const nameLabel = document.createElement('div');
+        nameLabel.className = 'username-label';
+        nameLabel.textContent = userId;
+        nameLabel.style.position = 'absolute';
+        nameLabel.style.bottom = '5px';
+        nameLabel.style.left = '5px';
+        nameLabel.style.color = 'white';
+        nameLabel.style.fontSize = '11px';
+        nameLabel.style.backgroundColor = 'rgba(0,0,0,0.8)';
+        nameLabel.style.padding = '2px 5px';
+        nameLabel.style.borderRadius = '3px';
+        nameLabel.style.fontWeight = 'bold';
+        videoContainer.appendChild(nameLabel);
+        // Add to game container
+        gameContainer.appendChild(videoContainer);
+        // Attach subscriber video
+        subscriber.addVideoElement(videoContainer);
+        // Store reference
+        this.videoElements.set(userId, videoContainer);
+    }
+    removeVideoElement(userId) {
+        const videoElement = this.videoElements.get(userId);
+        if (videoElement) {
+            videoElement.remove();
+            this.videoElements.delete(userId);
+        }
+    }
+    updateVideoElementPosition(userId) {
+        const playerCircle = this.gameScene.remotePlayers.get(userId);
+        const videoElement = this.videoElements.get(userId);
+        if (playerCircle && videoElement) {
+            videoElement.style.left = `${playerCircle.x - 60}px`;
+            videoElement.style.top = `${playerCircle.y - 120}px`;
+        }
+    }
+    findStreamByUserId(userId) {
+        if (!this.session || !this.session.remoteConnections) return null;
+        const connections = this.session.remoteConnections;
+        for(let connectionId in connections){
+            const connection = connections[connectionId];
+            try {
+                const userData = JSON.parse(connection.data);
+                if (userData.userId === userId && connection.streamManagers.length > 0) return connection.streamManagers[0].stream;
+            } catch (e) {
+                console.warn('Error parsing connection data:', e);
+            }
+        }
+        return null;
+    }
+    removeUser(userId) {
+        this.unsubscribeFromUser(userId);
+        this.userPositions.delete(userId);
+    }
+    // Toggle video/audio
+    toggleVideo() {
+        if (this.publisher) {
+            this.publisher.publishVideo(!this.publisher.videoActive);
+            return this.publisher.videoActive;
+        }
+        return false;
+    }
+    toggleAudio() {
+        if (this.publisher) {
+            this.publisher.publishAudio(!this.publisher.audioActive);
+            return this.publisher.audioActive;
+        }
+        return false;
+    }
+    // Clean up when leaving
+    async disconnect() {
+        if (this.session) await this.session.disconnect();
+        // Remove all video elements
+        this.videoElements.forEach((element)=>{
+            element.remove();
+        });
+        this.subscribers.clear();
+        this.videoElements.clear();
+        this.userPositions.clear();
+    }
+    // Get list of users with active video connections
+    getConnectedUsers() {
+        return Array.from(this.subscribers.keys());
+    }
+    // Update all video element positions (call this when players move)
+    updateAllVideoPositions() {
+        this.videoElements.forEach((videoElement, userId)=>{
+            this.updateVideoElementPosition(userId);
+        });
+    }
+}
+exports.default = PhaserVideoManager;
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}]},["fhBSv","bNJxx"], "bNJxx", "parcelRequirebeba", {})
 
 //# sourceMappingURL=dummy.5d840517.js.map

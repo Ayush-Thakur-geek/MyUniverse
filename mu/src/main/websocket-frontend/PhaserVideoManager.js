@@ -3,32 +3,37 @@ class PhaserVideoManager {
         this.gameScene = gameScene;
         this.session = null;
         this.publisher = null;
-        this.subscribers = new Map();
-        this.userPositions = new Map();
-        this.proximityRadius = 60;
+        this.subscribers = new Map(); // userId -> subscriber
+        this.userPositions = new Map(); // userId -> {x, y}
+        this.proximityRadius = 60; // pixels
         this.localUserId = null;
-        this.videoElements = new Map();
+        this.videoElements = new Map(); // userId -> video container element
     }
 
-    async initialize(sessionId, token, userId) {
+    async initializeSession(sessionId, token, userId) {
         this.localUserId = userId;
 
         try {
+            // Initialize OpenVidu session
             this.session = new OpenVidu().initSession();
 
+            // Set up event handlers
             this.setupEventHandlers();
 
+            // Connect to session
             await this.session.connect(token, {
                 userId: userId,
                 roomId: this.gameScene.roomId
             });
 
+            // Publish own video stream
             await this.publishStream();
 
             console.log('Video session initialized successfully');
             return true;
+
         } catch (error) {
-            console.error('Error initializing video session: ', error);
+            console.error('Error initializing video session:', error);
             return false;
         }
     }
@@ -36,17 +41,20 @@ class PhaserVideoManager {
     setupEventHandlers() {
         // When a new user joins and starts publishing
         this.session.on('streamCreated', (event) => {
-            console.log(`New stream created: ${event.stream.connection.data}`);
+            console.log('New stream created:', event.stream.connection.data);
+            // Don't auto-subscribe - wait for proximity signal
         });
 
+        // When a user leaves or stops publishing
         this.session.on('streamDestroyed', (event) => {
-            console.log(`Stream destroyed: ${event.stream.connection.data}`);
+            console.log('Stream destroyed:', event.stream.connection.data);
             const userData = JSON.parse(event.stream.connection.data);
             this.unsubscribeFromUser(userData.userId);
         });
 
+        // Connection events
         this.session.on('connectionCreated', (event) => {
-            console.log(`User connected: ${event.connection.data}`);
+            console.log('User connected:', event.connection.data);
         });
 
         this.session.on('connectionDestroyed', (event) => {
@@ -62,18 +70,23 @@ class PhaserVideoManager {
 
     async publishStream() {
         try {
-            this.publisher = await OpenVidu().getUserMedia({
-                videoSource: undefined,
-                audioSource: undefined,
-                resolution: '1280x720',
-                frameRate: 15
+            // Create publisher with video and audio
+            this.publisher = await OpenVidu.getUserMedia({
+                videoSource: undefined, // Default camera
+                audioSource: undefined, // Default microphone
+                publishAudio: true,
+                publishVideo: true,
+                resolution: '320x240', // Lower resolution for performance
+                frameRate: 15 // Lower framerate for performance
             });
 
             this.publisher = this.session.publish(this.publisher);
 
+            // Add local video to DOM
             this.createLocalVideoElement();
+
         } catch (error) {
-            console.error('Error in publishStream: ', error);
+            console.error('Error publishing stream:', error);
         }
     }
 
@@ -81,7 +94,7 @@ class PhaserVideoManager {
         const localVideoContainer = document.getElementById('local-video-container');
         if (localVideoContainer && this.publisher) {
             this.publisher.addVideoElement(localVideoContainer);
-            console.log('Local Video element created');
+            console.log('Local video element created');
         }
     }
 
@@ -89,7 +102,7 @@ class PhaserVideoManager {
         userIds.forEach(userId => {
             const stream = this.findStreamByUserId(userId);
             if (stream && !this.subscribers.has(userId)) {
-                console.log(`Subscribing to user in proximity: ${userId}`);
+                console.log('Subscribing to user in proximity:', userId);
                 this.subscribeToStream(stream, userId);
             }
         });
@@ -97,7 +110,7 @@ class PhaserVideoManager {
 
     handleUsersLeaveProximity(userIds) {
         userIds.forEach(userId => {
-            this.unsubscibeFromUser(userId);
+            this.unsubscribeFromUser(userId);
         });
     }
 
@@ -106,11 +119,13 @@ class PhaserVideoManager {
             const subscriber = this.session.subscribe(stream);
             this.subscribers.set(userId, subscriber);
 
+            // Create video element positioned near the player in the game
             this.createRemoteVideoElement(userId, subscriber);
 
-            console.log(`Subscribing to stream: ${stream}, userId: ${userId}`);
+            console.log('Subscribed to stream for user:', userId);
+
         } catch (error) {
-            console.error('Error subscribing to stream: ' + error);
+            console.error('Error subscribing to stream:', error);
         }
     }
 
@@ -222,9 +237,10 @@ class PhaserVideoManager {
         this.userPositions.delete(userId);
     }
 
+    // Toggle video/audio
     toggleVideo() {
         if (this.publisher) {
-            this.publisher.publishVideo();
+            this.publisher.publishVideo(!this.publisher.videoActive);
             return this.publisher.videoActive;
         }
         return false;
