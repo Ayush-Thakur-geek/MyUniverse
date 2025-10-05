@@ -1,190 +1,436 @@
+import { Room, RoomEvent, Track } from 'livekit-client';
+
 class PhaserVideoManager {
     constructor(gameScene) {
         this.gameScene = gameScene;
-        this.session = null;
-        this.publisher = null;
-        this.subscribers = new Map();
-        this.userPositions = new Map();
+        this.room = null;
+        this.localParticipant = null;
+        this.remoteParticipants = new Map();
         this.proximityRadius = 60;
         this.localUserId = null;
         this.videoElements = new Map();
+        this.audioElements = new Map(); // Track audio elements for cleanup
+        this.subscribedTracks = new Map();
+        this.pendingProximityUsers = new Set(); // Handle race conditions
     }
 
-    async initialize(sessionId, token, userId) {
+    async initializeSession(roomId, token, userId) {
         this.localUserId = userId;
 
         try {
-            this.session = new OpenVidu().initSession();
-
-            this.setupEventHandlers();
-
-            await this.session.connect(token, {
-                userId: userId,
-                roomId: this.gameScene.roomId
+            // Create LiveKit room with simpler configuration
+            this.room = new Room({
+                adaptiveStream: true,
+                dynacast: true,
+                videoCaptureDefaults: {
+                    resolution: {
+                        width: 320,
+                        height: 240,
+                        frameRate: 15
+                    }
+                },
+                audioCaptureDefaults: {
+                    autoGainControl: true,
+                    echoCancellation: true,
+                    noiseSuppression: true
+                }
             });
 
-            await this.publishStream();
+            // Set up event handlers BEFORE connecting
+            this.setupEventHandlers();
 
-            console.log('Video session initialized successfully');
+            // Subscribe to proximity updates from backend
+            this.subscribeToProximityUpdates(roomId);
+
+            // Connect to room
+            await this.room.connect('ws://localhost:7880', token);
+            console.log('Connected to LiveKit room:', this.room.name);
+
+            // Process already-connected participants
+            this.processExistingParticipants();
+
+            // Enable camera and microphone
+            try {
+                await this.room.localParticipant.enableCameraAndMicrophone();
+                console.log('Camera and microphone enabled');
+            } catch (mediaError) {
+                console.error('Error accessing camera/microphone:', mediaError);
+                // Continue even if camera/mic fails - user might just want to watch
+            }
+
             return true;
+
         } catch (error) {
-            console.error('Error initializing video session: ', error);
+            console.error('Error connecting to room:', error);
             return false;
         }
     }
 
     setupEventHandlers() {
-        // When a new user joins and starts publishing
-        this.session.on('streamCreated', (event) => {
-            console.log(`New stream created: ${event.stream.connection.data}`);
+        // Handle participant connected
+        this.room.on(RoomEvent.ParticipantConnected, (participant) => {
+            console.log('Participant connected:', participant.identity);
+            console.log(`prev size of remoteParticipants: ${this.remoteParticipants.size}`);
+            this.remoteParticipants.set(participant.identity, participant);
+            console.log(`new size of remoteParticipants: ${this.remoteParticipants.size}`);
         });
 
-        this.session.on('streamDestroyed', (event) => {
-            console.log(`Stream destroyed: ${event.stream.connection.data}`);
-            const userData = JSON.parse(event.stream.connection.data);
-            this.unsubscribeFromUser(userData.userId);
+        // Handle participant disconnected
+        this.room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+            console.log('Participant disconnected:', participant.identity);
+            this.remoteParticipants.delete(participant.identity);
+            this.removeVideoElement(participant.identity);
+            this.removeAudioElement(participant.identity);
+            this.subscribedTracks.delete(participant.identity);
+            this.pendingProximityUsers.delete(participant.identity);
         });
 
-        this.session.on('connectionCreated', (event) => {
-            console.log(`User connected: ${event.connection.data}`);
+        // Handle track subscribed
+        this.room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+            console.log(`Track subscribed: ${track.kind} from ${participant.identity}`);
+
+            if (track.kind === Track.Kind.Video) {
+                // Check if backend already told us this user is in proximity OR currently in proximity
+                if (this.isUserInProximity(participant.identity) ||
+                    this.pendingProximityUsers.has(participant.identity)) {
+                    this.attachVideoTrack(track, participant.identity);
+                    this.pendingProximityUsers.delete(participant.identity);
+                }
+            }
+            // Always attach audio regardless of proximity
+            else if (track.kind === Track.Kind.Audio) {
+                this.attachAudioTrack(track, participant.identity);
+            }
         });
 
-        this.session.on('connectionDestroyed', (event) => {
-            console.log('User disconnected:', event.connection.data);
-            const userData = JSON.parse(event.connection.data);
-            this.removeUser(userData.userId);
+        // Handle track unsubscribed
+        this.room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+            console.log(`Track unsubscribed: ${track.kind} from ${participant.identity}`);
+            if (track.detach) {
+                track.detach();
+            }
         });
 
-        this.session.on('exception', (event) => {
-            console.error('OpenVidu exception:', event);
+        // Handle local track published - create local video AFTER tracks are published
+        this.room.on(RoomEvent.LocalTrackPublished, (publication, participant) => {
+            console.log(`Local track published: ${publication.kind}`);
+            if (publication.kind === Track.Kind.Video) {
+                this.createLocalVideoElement();
+            }
         });
-    }
 
-    async publishStream() {
-        try {
-            this.publisher = await OpenVidu().getUserMedia({
-                videoSource: undefined,
-                audioSource: undefined,
-                resolution: '1280x720',
-                frameRate: 15
-            });
+        // Handle disconnected
+        this.room.on(RoomEvent.Disconnected, (reason) => {
+            console.log('Disconnected from room:', reason);
+            this.cleanup();
+        });
 
-            this.publisher = this.session.publish(this.publisher);
+        // Handle reconnecting
+        this.room.on(RoomEvent.Reconnecting, () => {
+            console.log('Reconnecting to room...');
+        });
 
-            this.createLocalVideoElement();
-        } catch (error) {
-            console.error('Error in publishStream: ', error);
-        }
+        // Handle reconnected
+        this.room.on(RoomEvent.Reconnected, () => {
+            console.log('Reconnected to room');
+        });
     }
 
     createLocalVideoElement() {
-        const localVideoContainer = document.getElementById('local-video-container');
-        if (localVideoContainer && this.publisher) {
-            this.publisher.addVideoElement(localVideoContainer);
-            console.log('Local Video element created');
+        // Get local video track publication
+        const localVideoTrackPublication = this.room.localParticipant.videoTrackPublications.values().next().value;
+
+        if (!localVideoTrackPublication || !localVideoTrackPublication.track) {
+            console.warn('No local video track found');
+            return;
         }
+
+        // Remove existing local video container if it exists
+        let existingContainer = document.getElementById('local-video-container');
+        if (existingContainer) {
+            existingContainer.remove();
+        }
+
+        // Create new container
+        const container = document.createElement('div');
+        container.id = 'local-video-container';
+        container.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 160px;
+            height: 120px;
+            border: 3px solid #4ecdc4;
+            border-radius: 8px;
+            overflow: hidden;
+            z-index: 1001;
+            background: #000;
+        `;
+
+        // Add "You" label
+        const label = document.createElement('div');
+        label.textContent = 'You (' + this.localUserId + ')';
+        label.style.cssText = `
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            color: white;
+            font-size: 12px;
+            background: rgba(0,0,0,0.8);
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            z-index: 10;
+        `;
+        container.appendChild(label);
+
+        // Attach video track
+        const videoElement = localVideoTrackPublication.track.attach();
+        videoElement.style.width = '100%';
+        videoElement.style.height = '100%';
+        videoElement.style.objectFit = 'cover';
+        container.insertBefore(videoElement, container.firstChild);
+
+        document.body.appendChild(container);
+        console.log('Local video element created');
+    }
+
+    processExistingParticipants() {
+        console.log('Processing existing participants in room');
+
+        // Add all existing remote participants to our map
+        this.room.remoteParticipants.forEach((participant, identity) => {
+            console.log('Found existing participant:', identity);
+            console.log(`prev size of remoteParticipants: ${this.remoteParticipants.size}`);
+            this.remoteParticipants.set(identity, participant);
+            console.log(`new size of remoteParticipants: ${this.remoteParticipants.size}`);
+
+            // Process their already-published tracks
+            this.processParticipantTracks(participant);
+        });
+    }
+
+    processParticipantTracks(participant) {
+        // Process video tracks
+        participant.videoTrackPublications.forEach((publication) => {
+            if (publication.isSubscribed && publication.track) {
+                console.log(`Processing existing video track for ${participant.identity}`);
+                if (this.isUserInProximity(participant.identity) ||
+                    this.pendingProximityUsers.has(participant.identity)) {
+                    this.attachVideoTrack(publication.track, participant.identity);
+                    this.pendingProximityUsers.delete(participant.identity);
+                }
+            }
+        });
+
+        // Process audio tracks
+        participant.audioTrackPublications.forEach((publication) => {
+            if (publication.isSubscribed && publication.track) {
+                console.log(`Processing existing audio track for ${participant.identity}`);
+                this.attachAudioTrack(publication.track, participant.identity);
+            }
+        });
+    }
+
+    attachVideoTrack(track, userId) {
+        try {
+            // Remove existing video if any
+            this.removeVideoElement(userId);
+
+            const playerCircle = this.gameScene.remotePlayers.get(userId);
+            if (!playerCircle) {
+                console.warn('Player circle not found for:', userId);
+                return;
+            }
+
+            // Create video container
+            const videoContainer = document.createElement('div');
+            videoContainer.id = `video-${userId}`;
+            videoContainer.style.cssText = `
+                position: absolute;
+                width: 120px;
+                height: 90px;
+                border: 2px solid #4ecdc4;
+                border-radius: 8px;
+                overflow: hidden;
+                z-index: 1000;
+                background: #000;
+                pointer-events: none;
+            `;
+
+            // Get game container
+            const gameContainer = document.getElementById('game-container');
+            if (!gameContainer) {
+                console.error('Game container not found');
+                return;
+            }
+
+            // Convert Phaser world coordinates to screen coordinates
+            const camera = this.gameScene.cameras.main;
+            const screenX = (playerCircle.x - camera.scrollX) * camera.zoom;
+            const screenY = (playerCircle.y - camera.scrollY) * camera.zoom;
+
+            videoContainer.style.left = `${screenX - 60}px`;
+            videoContainer.style.top = `${screenY - 120}px`;
+
+            // Add username label
+            const label = document.createElement('div');
+            label.textContent = userId;
+            label.style.cssText = `
+                position: absolute;
+                bottom: 5px;
+                left: 5px;
+                color: white;
+                font-size: 11px;
+                background: rgba(0,0,0,0.8);
+                padding: 2px 5px;
+                border-radius: 3px;
+                font-weight: bold;
+                z-index: 10;
+            `;
+            videoContainer.appendChild(label);
+
+            // Attach video track
+            const videoElement = track.attach();
+            videoElement.style.width = '100%';
+            videoElement.style.height = '100%';
+            videoElement.style.objectFit = 'cover';
+            videoContainer.insertBefore(videoElement, videoContainer.firstChild);
+
+            gameContainer.appendChild(videoContainer);
+            this.videoElements.set(userId, videoContainer);
+            this.subscribedTracks.set(userId, true);
+
+            console.log('Video element created for:', userId);
+        } catch (error) {
+            console.error(`Error attaching video for ${userId}:`, error);
+        }
+    }
+
+    attachAudioTrack(track, userId) {
+        try {
+            // Remove existing audio if any
+            this.removeAudioElement(userId);
+
+            // Audio elements don't need to be visible
+            const audioElement = track.attach();
+            audioElement.style.display = 'none';
+            document.body.appendChild(audioElement);
+            this.audioElements.set(userId, audioElement);
+            console.log('Audio track attached for:', userId);
+        } catch (error) {
+            console.error(`Error attaching audio for ${userId}:`, error);
+        }
+    }
+
+    isUserInProximity(userId) {
+        const localPlayer = this.gameScene.player;
+        const remotePlayer = this.gameScene.remotePlayers.get(userId);
+
+        if (!localPlayer || !remotePlayer) {
+            return false;
+        }
+
+        const distance = Phaser.Math.Distance.Between(
+            localPlayer.x, localPlayer.y,
+            remotePlayer.x, remotePlayer.y
+        );
+
+        return distance <= this.proximityRadius;
     }
 
     handleUsersEnterProximity(userIds) {
         userIds.forEach(userId => {
-            const stream = this.findStreamByUserId(userId);
-            if (stream && !this.subscribers.has(userId)) {
-                console.log(`Subscribing to user in proximity: ${userId}`);
-                this.subscribeToStream(stream, userId);
+            console.log(`${this.localUserId} ------ ${userId}`);
+            if (userId !== this.localUserId) {
+                console.log('User enter proximity:', userId);
+                if (this.subscribedTracks.has(userId)) {
+                    return; // Already showing video
+                }
+
+                const participant = this.remoteParticipants.get(userId);
+                console.log(`checking for availability ${participant.identity}`);
+                if (participant) {
+                    // Find video track
+                    console.log(`Hooray ${participant.identity}`);
+                    const videoTrackPub = Array.from(participant.videoTrackPublications.values())[0];
+                    if (videoTrackPub && videoTrackPub.track) {
+                        this.attachVideoTrack(videoTrackPub.track, userId);
+                    } else {
+                        // Track not ready yet - mark for later when TrackSubscribed fires
+                        this.pendingProximityUsers.add(userId);
+                        console.log(`Video track not ready for ${userId}, marked as pending`);
+                    }
+                } else {
+                    // Participant not connected yet - mark for later
+                    this.pendingProximityUsers.add(userId);
+                    console.log(`Participant ${userId} not connected yet, marked as pending`);
+                }
             }
+
         });
     }
 
     handleUsersLeaveProximity(userIds) {
         userIds.forEach(userId => {
-            this.unsubscibeFromUser(userId);
+            this.removeVideoElement(userId);
+            this.subscribedTracks.delete(userId);
+            this.pendingProximityUsers.delete(userId);
         });
     }
 
-    subscribeToStream(stream, userId) {
-        try {
-            const subscriber = this.session.subscribe(stream);
-            this.subscribers.set(userId, subscriber);
-
-            this.createRemoteVideoElement(userId, subscriber);
-
-            console.log(`Subscribing to stream: ${stream}, userId: ${userId}`);
-        } catch (error) {
-            console.error('Error subscribing to stream: ' + error);
-        }
-    }
-
-    unsubscribeFromUser(userId) {
-        if (this.subscribers.has(userId)) {
-            console.log('Unsubscribing from user leaving proximity:', userId);
-            const subscriber = this.subscribers.get(userId);
-            this.session.unsubscribe(subscriber);
-            this.subscribers.delete(userId);
-            this.removeVideoElement(userId);
-        }
-    }
-
-    createRemoteVideoElement(userId, subscriber) {
-        // Get player position from the game scene
-        const playerCircle = this.gameScene.remotePlayers.get(userId);
-        if (!playerCircle) {
-            console.warn('Player circle not found for user:', userId);
-            return;
-        }
-
-        // Create video container
-        const videoContainer = document.createElement('div');
-        videoContainer.id = `video-${userId}`;
-        videoContainer.className = 'remote-video-container';
-        videoContainer.style.position = 'absolute';
-        videoContainer.style.width = '120px';
-        videoContainer.style.height = '90px';
-        videoContainer.style.border = '2px solid #00ff00';
-        videoContainer.style.borderRadius = '8px';
-        videoContainer.style.overflow = 'hidden';
-        videoContainer.style.zIndex = '1000';
-        videoContainer.style.pointerEvents = 'none';
-
-        // Position near the player's game position
-        const gameContainer = document.getElementById('game-container');
-        const gameRect = gameContainer.getBoundingClientRect();
-
-        // Position video above the player circle
-        videoContainer.style.left = `${playerCircle.x - 60}px`;
-        videoContainer.style.top = `${playerCircle.y - 120}px`;
-
-        // Add username label
-        const nameLabel = document.createElement('div');
-        nameLabel.className = 'username-label';
-        nameLabel.textContent = userId;
-        nameLabel.style.position = 'absolute';
-        nameLabel.style.bottom = '5px';
-        nameLabel.style.left = '5px';
-        nameLabel.style.color = 'white';
-        nameLabel.style.fontSize = '11px';
-        nameLabel.style.backgroundColor = 'rgba(0,0,0,0.8)';
-        nameLabel.style.padding = '2px 5px';
-        nameLabel.style.borderRadius = '3px';
-        nameLabel.style.fontWeight = 'bold';
-
-        videoContainer.appendChild(nameLabel);
-
-        // Add to game container
-        gameContainer.appendChild(videoContainer);
-
-        // Attach subscriber video
-        subscriber.addVideoElement(videoContainer);
-
-        // Store reference
-        this.videoElements.set(userId, videoContainer);
-    }
-
     removeVideoElement(userId) {
-        const videoElement = this.videoElements.get(userId);
-        if (videoElement) {
-            videoElement.remove();
+        const element = this.videoElements.get(userId);
+        if (element) {
+            // Properly detach media elements before removing
+            const mediaElements = element.querySelectorAll('video');
+            mediaElements.forEach(el => {
+                el.srcObject = null;
+            });
+            element.remove();
             this.videoElements.delete(userId);
+            console.log('Video element removed for:', userId);
         }
+    }
+
+    removeAudioElement(userId) {
+        const element = this.audioElements.get(userId);
+        if (element) {
+            element.srcObject = null;
+            element.remove();
+            this.audioElements.delete(userId);
+            console.log('Audio element removed for:', userId);
+        }
+    }
+
+    toggleVideo() {
+        const localVideoPub = Array.from(this.room.localParticipant.videoTrackPublications.values())[0];
+        if (localVideoPub) {
+            const enabled = localVideoPub.isMuted;
+            if (enabled) {
+                localVideoPub.unmute();
+            } else {
+                localVideoPub.mute();
+            }
+            console.log('Video toggled:', enabled ? 'ON' : 'OFF');
+            return enabled;
+        }
+        return false;
+    }
+
+    toggleAudio() {
+        const localAudioPub = Array.from(this.room.localParticipant.audioTrackPublications.values())[0];
+        if (localAudioPub) {
+            const enabled = localAudioPub.isMuted;
+            if (enabled) {
+                localAudioPub.unmute();
+            } else {
+                localAudioPub.mute();
+            }
+            console.log('Audio toggled:', enabled ? 'ON' : 'OFF');
+            return enabled;
+        }
+        return false;
     }
 
     updateVideoElementPosition(userId) {
@@ -192,78 +438,138 @@ class PhaserVideoManager {
         const videoElement = this.videoElements.get(userId);
 
         if (playerCircle && videoElement) {
-            videoElement.style.left = `${playerCircle.x - 60}px`;
-            videoElement.style.top = `${playerCircle.y - 120}px`;
+            // Convert Phaser world coordinates to screen coordinates
+            const camera = this.gameScene.cameras.main;
+            const screenX = (playerCircle.x - camera.scrollX) * camera.zoom;
+            const screenY = (playerCircle.y - camera.scrollY) * camera.zoom;
+
+            videoElement.style.left = `${screenX - 60}px`;
+            videoElement.style.top = `${screenY - 120}px`;
         }
     }
 
-    findStreamByUserId(userId) {
-        if (!this.session || !this.session.remoteConnections) {
-            return null;
-        }
-
-        const connections = this.session.remoteConnections;
-        for (let connectionId in connections) {
-            const connection = connections[connectionId];
-            try {
-                const userData = JSON.parse(connection.data);
-                if (userData.userId === userId && connection.streamManagers.length > 0) {
-                    return connection.streamManagers[0].stream;
-                }
-            } catch (e) {
-                console.warn('Error parsing connection data:', e);
-            }
-        }
-        return null;
-    }
-
-    removeUser(userId) {
-        this.unsubscribeFromUser(userId);
-        this.userPositions.delete(userId);
-    }
-
-    toggleVideo() {
-        if (this.publisher) {
-            this.publisher.publishVideo();
-            return this.publisher.videoActive;
-        }
-        return false;
-    }
-
-    toggleAudio() {
-        if (this.publisher) {
-            this.publisher.publishAudio(!this.publisher.audioActive);
-            return this.publisher.audioActive;
-        }
-        return false;
-    }
-
-    // Clean up when leaving
-    async disconnect() {
-        if (this.session) {
-            await this.session.disconnect();
-        }
-
-        // Remove all video elements
-        this.videoElements.forEach((element) => {
-            element.remove();
-        });
-
-        this.subscribers.clear();
-        this.videoElements.clear();
-        this.userPositions.clear();
-    }
-
-    // Get list of users with active video connections
-    getConnectedUsers() {
-        return Array.from(this.subscribers.keys());
-    }
-
-    // Update all video element positions (call this when players move)
     updateAllVideoPositions() {
-        this.videoElements.forEach((videoElement, userId) => {
+        this.videoElements.forEach((element, userId) => {
             this.updateVideoElementPosition(userId);
         });
+    }
+
+    cleanup() {
+        // Unsubscribe from proximity updates
+        if (this.proximitySubscription) {
+            this.proximitySubscription.unsubscribe();
+            this.proximitySubscription = null;
+        }
+
+        // Remove all video elements with proper cleanup
+        this.videoElements.forEach(element => {
+            const mediaElements = element.querySelectorAll('video');
+            mediaElements.forEach(el => el.srcObject = null);
+            element.remove();
+        });
+        this.videoElements.clear();
+
+        // Remove all audio elements with proper cleanup
+        this.audioElements.forEach(element => {
+            element.srcObject = null;
+            element.remove();
+        });
+        this.audioElements.clear();
+
+        this.subscribedTracks.clear();
+        this.pendingProximityUsers.clear();
+
+        // Remove local video
+        const localVideo = document.getElementById('local-video-container');
+        if (localVideo) {
+            const mediaElements = localVideo.querySelectorAll('video');
+            mediaElements.forEach(el => el.srcObject = null);
+            localVideo.remove();
+        }
+    }
+
+    async disconnect() {
+        if (this.room) {
+            await this.room.disconnect();
+        }
+        this.cleanup();
+    }
+
+    // Get list of connected users
+    getConnectedUsers() {
+        return Array.from(this.remoteParticipants.keys());
+    }
+
+    // Check if we have an active connection
+    isConnected() {
+        return this.room && this.room.state === 'connected';
+    }
+
+    // Subscribe to proximity updates from backend via WebSocket
+    subscribeToProximityUpdates(roomId) {
+        if (!this.stompClient) {
+            console.warn('No STOMP client provided, proximity updates will not work');
+            return;
+        }
+
+        const subscription = this.stompClient.subscribe(
+            `/user/queue/${roomId}/video-proximity`,
+            (message) => {
+                try {
+                    const update = JSON.parse(message.body);
+                    this.handleProximityUpdate(update);
+                } catch (error) {
+                    console.error('Error parsing proximity update:', error);
+                }
+            }
+        );
+
+        this.proximitySubscription = subscription;
+        console.log('Subscribed to proximity updates for room:', roomId);
+    }
+
+    // Handle proximity updates from backend
+    handleProximityUpdate(update) {
+        console.log('Received proximity update:', update);
+
+        // Handle the moving user's update (has newProximityPlayers/leavingPlayers)
+        if (update.newProximityPlayers !== undefined) {
+            const entering = Array.isArray(update.newProximityPlayers)
+                ? update.newProximityPlayers
+                : Array.from(update.newProximityPlayers);
+            const leaving = Array.isArray(update.leavingPlayers)
+                ? update.leavingPlayers
+                : Array.from(update.leavingPlayers);
+
+            if (entering.length > 0) {
+                console.log('Users entering proximity:', entering);
+                this.handleUsersEnterProximity(entering);
+            }
+
+            if (leaving.length > 0) {
+                console.log('Users leaving proximity:', leaving);
+                this.handleUsersLeaveProximity(leaving);
+            }
+        }
+        // Handle reverse updates (has enteringUsers/leavingUsers)
+        else if (update.enteringUsers !== undefined) {
+            const entering = Array.isArray(update.enteringUsers)
+                ? update.enteringUsers
+                : Array.from(update.enteringUsers);
+            const leaving = Array.isArray(update.leavingUsers)
+                ? update.leavingUsers
+                : Array.from(update.leavingUsers);
+
+            if (entering.length > 0) {
+                console.log('Users entering proximity (reverse):', entering);
+                this.handleUsersEnterProximity(entering);
+            }
+
+            if (leaving.length > 0) {
+                console.log('Users leaving proximity (reverse):', leaving);
+                this.handleUsersLeaveProximity(leaving);
+            }
+        }
     }
 }
 

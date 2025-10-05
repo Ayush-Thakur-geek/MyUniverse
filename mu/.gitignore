@@ -3,10 +3,12 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-node_modules
+# Node dependencies
+node_modules/
+src/main/websocket-frontend/node_modules/
 
-
-src/main/resources/application.yaml
+# Parcel cache
+src/main/websocket-frontend/.parcel-cache/
 
 ### STS ###
 .apt_generated

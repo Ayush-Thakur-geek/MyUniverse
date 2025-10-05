@@ -20,8 +20,19 @@
 
 <div id="content">
     <div id="rtc-container" style="display: flex">
-        <div id="camera-container"></div>
-        <div id="microphone-container"></div>
+<!--        <div id="camera-container"></div>-->
+<!--        <div id="microphone-container"></div>-->
+        <div id="local-video-container" class="local-video-container">
+            <div class="username-label">You</div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls-panel">
+            <button id="toggle-video" class="control-button">📹 Video ON</button>
+            <button id="toggle-audio" class="control-button">🎤 Audio ON</button>
+            <button id="debug-proximity" class="control-button">🔍 Debug</button>
+            <button id="leave-game" class="control-button">🚪 Leave</button>
+        </div>
     </div>
     <div id="game-container"></div>
 </div>

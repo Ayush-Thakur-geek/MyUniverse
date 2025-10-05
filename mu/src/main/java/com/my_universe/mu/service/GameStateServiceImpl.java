@@ -1,9 +1,14 @@
 package com.my_universe.mu.service;
 
+import com.my_universe.mu.dtos.TokenRequestDto;
 import com.my_universe.mu.model.PlayerState;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,13 +28,19 @@ public class GameStateServiceImpl implements GameStateService {
 
     private final ConcurrentMap<String, ConcurrentMap<String, Set<String>>> roomProximityMap;
 
+    private final SimpMessagingTemplate messagingTemplate;
+
+    private final RestTemplate  restTemplate;
+
     ExecutorService executor = Executors.newFixedThreadPool(10);
 
-    GameStateServiceImpl(RoomService roomService) {
+    GameStateServiceImpl(RoomService roomService, SimpMessagingTemplate messagingTemplate,  RestTemplate restTemplate) {
         this.roomService = roomService;
         roomPlayerMap = new ConcurrentHashMap<>();
         roomGridMap = new ConcurrentHashMap<>();
         roomProximityMap = new ConcurrentHashMap<>();
+        this.messagingTemplate = messagingTemplate;
+        this.restTemplate = restTemplate;
     }
     int numBlocksX = 800/100;
     int numBlocksY = 600/100;
@@ -136,6 +147,7 @@ public class GameStateServiceImpl implements GameStateService {
                             log.info("Collision detected: Player " + userName + " too close to " + neighbourPlayerState.getUserName() + " (distance: " + distance + ")");
                             return false;
                         } else if (distance < PROXIMITY_DISTANCE) {
+                            System.out.println("collecting proximity player: " +  neighbourPlayerState.getUserName());
                             currentProximityPlayers.add(neighbourPlayerState.getUserName());
                         }
                     }
@@ -156,7 +168,16 @@ public class GameStateServiceImpl implements GameStateService {
 //            handleProximityChanges(position.getRoomId(), userName, currentProximityPlayers);
 //        });
         executor.submit(() -> {
-            handleProximityChanges(position.getRoomId(), userName, currentProximityPlayers);
+            try {
+                System.out.println("proximity players updating process: " + currentProximityPlayers.size());
+
+                // Ensure roomProximity exists
+                roomProximityMap.putIfAbsent(position.getRoomId(), new ConcurrentHashMap<>());
+
+                handleProximityChanges(position.getRoomId(), userName, currentProximityPlayers);
+            } catch (Exception e) {
+                e.printStackTrace(); // log the exception
+            }
         });
 
 
@@ -175,9 +196,13 @@ public class GameStateServiceImpl implements GameStateService {
         Set<String> leavingPlayers = new HashSet<>(previousProximityPlayers);
         leavingPlayers.removeAll(currentProximityPlayers);
 
-        roomProximity.put(userName, newProximityPlayers);
+        // FIX: Store ALL current proximity players, not just new ones
+        roomProximity.put(userName, currentProximityPlayers); // Changed from newProximityPlayers
+
+        System.out.println("proximity players updated: " + currentProximityPlayers.size());
 
         if (!newProximityPlayers.isEmpty() || !leavingPlayers.isEmpty()) {
+            System.out.println("calling sendProximityUpdates()");
             sendProximityUpdates(roomId, userName, newProximityPlayers, leavingPlayers);
         }
     }
@@ -186,14 +211,69 @@ public class GameStateServiceImpl implements GameStateService {
                                       String userName,
                                       Set<String> newProximityPlayers,
                                       Set<String> leavingPlayers) {
-        Map<String, Object> proximityUpdate = new HashMap<>();
-        proximityUpdate.put("type", "video-proximity-update");
-        proximityUpdate.put("userName", userName);
-        proximityUpdate.put("newProximityPlayers", newProximityPlayers);
-        proximityUpdate.put("leavingPlayers", leavingPlayers);
-        proximityUpdate.put("timestamp", System.currentTimeMillis());
+        try {
+            Map<String, Object> proximityUpdate = new HashMap<>();
+            proximityUpdate.put("flag", false);
+            proximityUpdate.put("type", "video-proximity-update");
+            proximityUpdate.put("userName", userName);
+            proximityUpdate.put("newProximityPlayers", newProximityPlayers);
+            proximityUpdate.put("leavingPlayers", leavingPlayers);
+            proximityUpdate.put("timestamp", System.currentTimeMillis());
+
+            messagingTemplate.convertAndSendToUser(userName,
+                    "/queue/" + roomId + "/video-proximity",
+                    proximityUpdate
+            );
+
+    //        for (String playerName : newProximityPlayers) {
+    //            System.out.println("Player in proximity: " + playerName);
+    //        }
+
+            // Also notify the users who are entering/leaving proximity
+            for (String otherUser : newProximityPlayers) {
+                System.out.println("sending proximity update: " + otherUser);
+                Map<String, Object> reverseUpdate = new HashMap<>();
+                reverseUpdate.put("flag", true);
+                reverseUpdate.put("type", "video-proximity-update");
+                reverseUpdate.put("userName", otherUser);
+                reverseUpdate.put("newProximityPlayers", Set.of(userName));
+                reverseUpdate.put("leavingUsers", Collections.emptySet());
+                reverseUpdate.put("timestamp", System.currentTimeMillis());
+
+                messagingTemplate.convertAndSendToUser(otherUser, "/queue/" + roomId + "/video-proximity", reverseUpdate);
+            }
+
+            for (String otherUser : leavingPlayers) {
+                Map<String, Object> reverseUpdate = new HashMap<>();
+                reverseUpdate.put("type", "video-proximity-update");
+                reverseUpdate.put("targetUser", otherUser);
+                reverseUpdate.put("enteringUsers", Collections.emptySet());
+                reverseUpdate.put("leavingUsers", Set.of(userName));
+                reverseUpdate.put("timestamp", System.currentTimeMillis());
+
+                messagingTemplate.convertAndSendToUser(otherUser, "/queue/" + roomId + "/video-proximity", reverseUpdate);
+            }
+
+            log.info("Proximity update sent for user {} in room {}: entering={}, leaving={}",
+                    userName, roomId, newProximityPlayers, leavingPlayers);
+
+        } catch (Exception e) {
+            e.printStackTrace(); // <--- see the exception
+        }
+    }
 
 
+    @Override
+    public Map<String, Object> createVideoSession(String roomId, String userName) {
+        TokenRequestDto dto = new TokenRequestDto(userName, roomId);
+
+        // POST to the RTC server with DTO as body, expecting Map response
+        ResponseEntity<Map> resp = restTemplate.postForEntity(
+                "http://localhost:9090/token",
+                dto,
+                Map.class
+        );
+        return resp.getBody();
     }
 
     @Override

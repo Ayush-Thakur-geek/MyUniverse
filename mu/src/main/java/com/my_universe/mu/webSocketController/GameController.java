@@ -1,6 +1,7 @@
 package com.my_universe.mu.webSocketController;
 
 import com.my_universe.mu.annotations.TimeMonitor;
+import com.my_universe.mu.dtos.LocalParticipantDto;
 import com.my_universe.mu.model.GameMessage;
 import com.my_universe.mu.model.PlayerState;
 import com.my_universe.mu.service.GameStateService;
@@ -25,14 +26,21 @@ import java.util.Random;
 @Log4j2
 public class GameController {
 
-    @Autowired
-    private SimpMessagingTemplate messagingTemplate;
+    private final SimpMessagingTemplate messagingTemplate;
 
-    @Autowired
-    private GameStateService gameStateService;
+    private final GameStateService gameStateService;
 
-    @Autowired
-    private UserService userService;
+    private final UserService userService;
+
+    GameController(
+            SimpMessagingTemplate messagingTemplate,
+            GameStateService gameStateService,
+            UserService userService
+    ) {
+        this.messagingTemplate = messagingTemplate;
+        this.gameStateService = gameStateService;
+        this.userService = userService;
+    }
 
     @MessageMapping("/{roomId}/move")
 //    @SendTo("/topic/{roomId}/position")
@@ -61,6 +69,33 @@ public class GameController {
         headerAccessor.getSessionAttributes().put("username", playerState.getUserName());
         headerAccessor.getSessionAttributes().put("id", playerState.getUserName());
         headerAccessor.getSessionAttributes().put("roomId", roomId);
+    }
+
+    @MessageMapping("/{roomId}/request-token")
+    public void requestVideoSession(
+            @DestinationVariable String roomId,
+            Principal principal
+    ) {
+        System.out.println("Haha this is a log");
+        String username = principal.getName();
+        log.info("Token requested by {} in room {}", username, roomId);
+        try {
+            Map<String, Object> token = gameStateService.createVideoSession(roomId, username);
+
+            // Send video session info to the requesting user
+            messagingTemplate.convertAndSendToUser(username, "/queue/" + roomId + "/video-token", token);
+
+            log.info("Video session data sent to user {} in room {}", username, roomId);
+
+        } catch (Exception e) {
+            log.error("Failed to create video session for user {} in room {}", username, roomId, e);
+
+            Map<String, Object> errorResponse = Map.of(
+                    "success", false,
+                    "error", "Failed to create video session: " + e.getMessage()
+            );
+            messagingTemplate.convertAndSendToUser(username, "/queue/" + roomId + "/video-token", errorResponse);
+        }
     }
 
     @SubscribeMapping("{roomId}/initial")
