@@ -19,7 +19,7 @@ class GameScene extends Phaser.Scene {
     }
 
     create() {
-        console.log("Inside the create method");
+        // console.log("Inside the create method");
 
         // Initialize video manager
         this.videoManager = new PhaserVideoManager(this);
@@ -33,7 +33,7 @@ class GameScene extends Phaser.Scene {
 
             // Iterate over `players`, not `playerState`
             players.forEach(player => {
-                console.log(`Processing player: ${player.userName}, with room id: ${player.roomId}`);
+                // console.log(`Processing player: ${player.userName}, with room id: ${player.roomId}`);
 
                 const circle = this.add.circle(
                     player.x,
@@ -54,7 +54,7 @@ class GameScene extends Phaser.Scene {
                     gameWebSocket.setCurrentUser(this.username);
                     gameWebSocket.requestVideoToken();
                 } else {
-                    console.log("Remote player:", player.userName);
+                    // console.log("Remote player:", player.userName);
                     this.remotePlayers.set(player.userName, circle);
                 }
             });
@@ -64,8 +64,8 @@ class GameScene extends Phaser.Scene {
 
         gameWebSocket.joinedPlayerState = playerState => {
 
-            console.log(`Username of joined player: ${playerState.userName}`);
-            console.log(`Username of local player: ${this.username}`)
+            // console.log(`Username of joined player: ${playerState.userName}`);
+            // console.log(`Username of local player: ${this.username}`)
             if (this.username !== "local" && playerState.userName !== this.username) {
                 console.log("Making of the circle")
                 const circle = this.add.circle(
@@ -79,21 +79,21 @@ class GameScene extends Phaser.Scene {
         };
 
         gameWebSocket.playerMovedState = playerState => {
-            console.log("updating the state of the moved state")
+            // console.log("updating the state of the moved state")
             let movedUsername = playerState.userName;
 
             if (this.username !== "local" && this.username !== movedUsername) {
 
                 let remotePlayerCircle = this.remotePlayers.get(movedUsername);
 
-                console.log(`The circle of ${playerState.userName}: ${remotePlayerCircle}`);
+                // console.log(`The circle of ${playerState.userName}: ${remotePlayerCircle}`);
 
                 if (remotePlayerCircle) {
                     remotePlayerCircle.x = playerState.x;
                     remotePlayerCircle.y = playerState.y;
-                    console.log(`Updated ${movedUsername} position to (${playerState.x}, ${playerState.y})`);
+                    // console.log(`Updated ${movedUsername} position to (${playerState.x}, ${playerState.y})`);
                 } else {
-                    console.log("Remote player not found");
+                    // console.log("Remote player not found");
                 }
             }
 
@@ -103,38 +103,42 @@ class GameScene extends Phaser.Scene {
             this.movePending = false;
 
             if (!allowed) {
-                console.log("Move not allowed, reverting position");
+                // console.log("Move not allowed, reverting position");
                 // Move not allowed: revert to previous position
                 this.player.x = this.prevPlayerX;
                 this.player.y = this.prevPlayerY;
             } else {
-                console.log("Move allowed, position confirmed");
+                // console.log("Move allowed, position confirmed");
                 // Position is already updated optimistically, no need to move again
             }
         };
 
         // Video-related callbacks
         gameWebSocket.onVideoSession = (videoSessionData) => {
-            // if (videoSessionData.success) {
-            //     console.log("Video session was successfully: ", videoSessionData);
-            //     this.initializeVideoSession(videoSessionData);
-            // } else {
-            //     console.error("Failed to get video session:", videoSessionData.error);
-            // }
             this.initializeVideoSession(videoSessionData);
         };
 
         gameWebSocket.onVideoProximityUpdate = (proximityUpdate) => {
-            if (proximityUpdate.targetUser === this.username) {
-                if (proximityUpdate.enteringUsers.length > 0) {
-                    console.log("Users entering proximity:", proximityUpdate.enteringUsers);
-                    this.videoManager.handleUsersEnterProximity(proximityUpdate.enteringUsers);
-                }
-                if (proximityUpdate.leavingUsers.length > 0) {
-                    console.log("Users leaving proximity:", proximityUpdate.leavingUsers);
-                    this.videoManager.handleUsersLeaveProximity(proximityUpdate.leavingUsers);
-                }
+
+            // if (proximityUpdate.userName === this.username) {
+            //     if (proximityUpdate.newProximityPlayers.length > 0) {
+            //         console.log(`Users entering proximity of user: ${this.username} are: ${proximityUpdate.newProximityPlayers}`);
+            //         this.videoManager.handleUsersEnterProximity(proximityUpdate.newProximityPlayers);
+            //     }
+            //     if (proximityUpdate.leavingPlayers.length> 0) {
+            //         console.log(`Users leaving leaving proximity of user: ${this.username} are: ${proximityUpdate.leavingPlayers}`);
+            //     }
+            // }
+            console.log(`In method onVideoProximityUpdate`)
+            if (proximityUpdate.get("userName") === this.username && proximityUpdate.get("newProximityPlayers")?.length > 0) {
+                console.log(`Users entering proximity of user: ${this.username} are: ${proximityUpdate.get("newProximityPlayers")}`);
+                this.videoManager.handleUsersEnterProximity(proximityUpdate.newProximityPlayers);
             }
+
+            if (proximityUpdate.get("leavingPlayers")?.length > 0) {
+                console.log(`Users leaving proximity of user: ${this.username} are: ${proximityUpdate.leavingPlayers}`);
+            }
+
         };
 
         gameWebSocket.onPlayerLeft = (leftPlayer) => {
@@ -240,7 +244,7 @@ class GameScene extends Phaser.Scene {
                 roomId: this.roomId
             };
 
-            console.log(`Sending player state:`, playerState);
+            // console.log(`Sending player state:`, playerState);
             gameWebSocket.sendPlayerPosition(playerState);
         }
     }

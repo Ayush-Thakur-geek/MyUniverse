@@ -147,6 +147,7 @@ public class GameStateServiceImpl implements GameStateService {
                             log.info("Collision detected: Player " + userName + " too close to " + neighbourPlayerState.getUserName() + " (distance: " + distance + ")");
                             return false;
                         } else if (distance < PROXIMITY_DISTANCE) {
+                            System.out.println("collecting proximity player: " +  neighbourPlayerState.getUserName());
                             currentProximityPlayers.add(neighbourPlayerState.getUserName());
                         }
                     }
@@ -167,7 +168,16 @@ public class GameStateServiceImpl implements GameStateService {
 //            handleProximityChanges(position.getRoomId(), userName, currentProximityPlayers);
 //        });
         executor.submit(() -> {
-            handleProximityChanges(position.getRoomId(), userName, currentProximityPlayers);
+            try {
+                System.out.println("proximity players updating process: " + currentProximityPlayers.size());
+
+                // Ensure roomProximity exists
+                roomProximityMap.putIfAbsent(position.getRoomId(), new ConcurrentHashMap<>());
+
+                handleProximityChanges(position.getRoomId(), userName, currentProximityPlayers);
+            } catch (Exception e) {
+                e.printStackTrace(); // log the exception
+            }
         });
 
 
@@ -186,9 +196,13 @@ public class GameStateServiceImpl implements GameStateService {
         Set<String> leavingPlayers = new HashSet<>(previousProximityPlayers);
         leavingPlayers.removeAll(currentProximityPlayers);
 
-        roomProximity.put(userName, newProximityPlayers);
+        // FIX: Store ALL current proximity players, not just new ones
+        roomProximity.put(userName, currentProximityPlayers); // Changed from newProximityPlayers
+
+        System.out.println("proximity players updated: " + currentProximityPlayers.size());
 
         if (!newProximityPlayers.isEmpty() || !leavingPlayers.isEmpty()) {
+            System.out.println("calling sendProximityUpdates()");
             sendProximityUpdates(roomId, userName, newProximityPlayers, leavingPlayers);
         }
     }
@@ -197,42 +211,57 @@ public class GameStateServiceImpl implements GameStateService {
                                       String userName,
                                       Set<String> newProximityPlayers,
                                       Set<String> leavingPlayers) {
-        Map<String, Object> proximityUpdate = new HashMap<>();
-        proximityUpdate.put("type", "video-proximity-update");
-        proximityUpdate.put("userName", userName);
-        proximityUpdate.put("newProximityPlayers", newProximityPlayers);
-        proximityUpdate.put("leavingPlayers", leavingPlayers);
-        proximityUpdate.put("timestamp", System.currentTimeMillis());
+        try {
+            Map<String, Object> proximityUpdate = new HashMap<>();
+            proximityUpdate.put("flag", false);
+            proximityUpdate.put("type", "video-proximity-update");
+            proximityUpdate.put("userName", userName);
+            proximityUpdate.put("newProximityPlayers", newProximityPlayers);
+            proximityUpdate.put("leavingPlayers", leavingPlayers);
+            proximityUpdate.put("timestamp", System.currentTimeMillis());
 
-        // Send to the specific user
-        messagingTemplate.convertAndSendToUser(userName, "/queue/" + roomId + "/video-proximity", proximityUpdate);
+            messagingTemplate.convertAndSendToUser(userName,
+                    "/queue/" + roomId + "/video-proximity",
+                    proximityUpdate
+            );
 
-        // Also notify the users who are entering/leaving proximity
-        for (String otherUser : newProximityPlayers) {
-            Map<String, Object> reverseUpdate = new HashMap<>();
-            reverseUpdate.put("type", "video-proximity-update");
-            reverseUpdate.put("targetUser", otherUser);
-            reverseUpdate.put("enteringUsers", Set.of(userName));
-            reverseUpdate.put("leavingUsers", Collections.emptySet());
-            reverseUpdate.put("timestamp", System.currentTimeMillis());
+    //        for (String playerName : newProximityPlayers) {
+    //            System.out.println("Player in proximity: " + playerName);
+    //        }
 
-            messagingTemplate.convertAndSendToUser(otherUser, "/queue/" + roomId + "/video-proximity", reverseUpdate);
+            // Also notify the users who are entering/leaving proximity
+            for (String otherUser : newProximityPlayers) {
+                System.out.println("sending proximity update: " + otherUser);
+                Map<String, Object> reverseUpdate = new HashMap<>();
+                reverseUpdate.put("flag", true);
+                reverseUpdate.put("type", "video-proximity-update");
+                reverseUpdate.put("userName", otherUser);
+                reverseUpdate.put("newProximityPlayers", Set.of(userName));
+                reverseUpdate.put("leavingUsers", Collections.emptySet());
+                reverseUpdate.put("timestamp", System.currentTimeMillis());
+
+                messagingTemplate.convertAndSendToUser(otherUser, "/queue/" + roomId + "/video-proximity", reverseUpdate);
+            }
+
+            for (String otherUser : leavingPlayers) {
+                Map<String, Object> reverseUpdate = new HashMap<>();
+                reverseUpdate.put("type", "video-proximity-update");
+                reverseUpdate.put("targetUser", otherUser);
+                reverseUpdate.put("enteringUsers", Collections.emptySet());
+                reverseUpdate.put("leavingUsers", Set.of(userName));
+                reverseUpdate.put("timestamp", System.currentTimeMillis());
+
+                messagingTemplate.convertAndSendToUser(otherUser, "/queue/" + roomId + "/video-proximity", reverseUpdate);
+            }
+
+            log.info("Proximity update sent for user {} in room {}: entering={}, leaving={}",
+                    userName, roomId, newProximityPlayers, leavingPlayers);
+
+        } catch (Exception e) {
+            e.printStackTrace(); // <--- see the exception
         }
-
-        for (String otherUser : leavingPlayers) {
-            Map<String, Object> reverseUpdate = new HashMap<>();
-            reverseUpdate.put("type", "video-proximity-update");
-            reverseUpdate.put("targetUser", otherUser);
-            reverseUpdate.put("enteringUsers", Collections.emptySet());
-            reverseUpdate.put("leavingUsers", Set.of(userName));
-            reverseUpdate.put("timestamp", System.currentTimeMillis());
-
-            messagingTemplate.convertAndSendToUser(otherUser, "/queue/" + roomId + "/video-proximity", reverseUpdate);
-        }
-
-        log.info("Proximity update sent for user {} in room {}: entering={}, leaving={}",
-                userName, roomId, newProximityPlayers, leavingPlayers);
     }
+
 
     @Override
     public Map<String, Object> createVideoSession(String roomId, String userName) {

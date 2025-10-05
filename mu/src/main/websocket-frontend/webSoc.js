@@ -20,7 +20,7 @@ class GameWebSocket {
             console.log("Connected: ", frame);
 
             this.stompClient.subscribe(`/topic/${this.roomId}/player-joined`, (message) => {
-                console.log("player-joined endpoint")
+                // console.log("player-joined endpoint")
                 const joinedPlayer = JSON.parse(message.body);
                 this.stompClient.send(`/app/${this.roomId}/join`, {}, JSON.stringify(joinedPlayer));
                 if (this.joinedPlayerState) {
@@ -30,27 +30,27 @@ class GameWebSocket {
 
             this.stompClient.subscribe(`/topic/${this.roomId}/canMove`, (message) => {
                 const reply = JSON.parse(message.body);
-                console.log("canMove", reply);
+                // console.log("canMove", reply);
                 if (this.onCanMove) {
                     this.onCanMove(reply);
                 }
             });
 
             this.stompClient.subscribe(`/topic/${roomId}/position`, (message) => {
-                console.log("Movement suspected");
+                // console.log("Movement suspected");
                 const playerMoved = JSON.parse(message.body);
                 if (this.playerMovedState) {
-                    console.log("true");
+                    // console.log("true");
                     this.playerMovedState(playerMoved);
                 } else {
-                    console.log("false");
+                    // console.log("false");
                 }
             });
 
             // New video-related subscriptions
             this.stompClient.subscribe(`/user/queue/${this.roomId}/video-token`, (message) => {
                 const videoSessionData = JSON.parse(message.body);
-                console.log("Video session data received:", videoSessionData);
+                // console.log("Video session data received:", videoSessionData);
                 if (this.onVideoSession) {
                     this.onVideoSession(videoSessionData);
                 }

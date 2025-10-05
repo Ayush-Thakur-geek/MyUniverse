@@ -1,6 +1,7 @@
 package com.my_universe.mu.webSocketController;
 
 import com.my_universe.mu.annotations.TimeMonitor;
+import com.my_universe.mu.dtos.LocalParticipantDto;
 import com.my_universe.mu.model.GameMessage;
 import com.my_universe.mu.model.PlayerState;
 import com.my_universe.mu.service.GameStateService;

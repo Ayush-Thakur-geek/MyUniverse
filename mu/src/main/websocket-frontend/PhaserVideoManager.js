@@ -39,9 +39,15 @@ class PhaserVideoManager {
             // Set up event handlers BEFORE connecting
             this.setupEventHandlers();
 
+            // Subscribe to proximity updates from backend
+            this.subscribeToProximityUpdates(roomId);
+
             // Connect to room
             await this.room.connect('ws://localhost:7880', token);
             console.log('Connected to LiveKit room:', this.room.name);
+
+            // Process already-connected participants
+            this.processExistingParticipants();
 
             // Enable camera and microphone
             try {
@@ -64,7 +70,9 @@ class PhaserVideoManager {
         // Handle participant connected
         this.room.on(RoomEvent.ParticipantConnected, (participant) => {
             console.log('Participant connected:', participant.identity);
+            console.log(`prev size of remoteParticipants: ${this.remoteParticipants.size}`);
             this.remoteParticipants.set(participant.identity, participant);
+            console.log(`new size of remoteParticipants: ${this.remoteParticipants.size}`);
         });
 
         // Handle participant disconnected
@@ -187,6 +195,43 @@ class PhaserVideoManager {
         console.log('Local video element created');
     }
 
+    processExistingParticipants() {
+        console.log('Processing existing participants in room');
+
+        // Add all existing remote participants to our map
+        this.room.remoteParticipants.forEach((participant, identity) => {
+            console.log('Found existing participant:', identity);
+            console.log(`prev size of remoteParticipants: ${this.remoteParticipants.size}`);
+            this.remoteParticipants.set(identity, participant);
+            console.log(`new size of remoteParticipants: ${this.remoteParticipants.size}`);
+
+            // Process their already-published tracks
+            this.processParticipantTracks(participant);
+        });
+    }
+
+    processParticipantTracks(participant) {
+        // Process video tracks
+        participant.videoTrackPublications.forEach((publication) => {
+            if (publication.isSubscribed && publication.track) {
+                console.log(`Processing existing video track for ${participant.identity}`);
+                if (this.isUserInProximity(participant.identity) ||
+                    this.pendingProximityUsers.has(participant.identity)) {
+                    this.attachVideoTrack(publication.track, participant.identity);
+                    this.pendingProximityUsers.delete(participant.identity);
+                }
+            }
+        });
+
+        // Process audio tracks
+        participant.audioTrackPublications.forEach((publication) => {
+            if (publication.isSubscribed && publication.track) {
+                console.log(`Processing existing audio track for ${participant.identity}`);
+                this.attachAudioTrack(publication.track, participant.identity);
+            }
+        });
+    }
+
     attachVideoTrack(track, userId) {
         try {
             // Remove existing video if any
@@ -296,26 +341,33 @@ class PhaserVideoManager {
 
     handleUsersEnterProximity(userIds) {
         userIds.forEach(userId => {
-            if (this.subscribedTracks.has(userId)) {
-                return; // Already showing video
+            console.log(`${this.localUserId} ------ ${userId}`);
+            if (userId !== this.localUserId) {
+                console.log('User enter proximity:', userId);
+                if (this.subscribedTracks.has(userId)) {
+                    return; // Already showing video
+                }
+
+                const participant = this.remoteParticipants.get(userId);
+                console.log(`checking for availability ${participant.identity}`);
+                if (participant) {
+                    // Find video track
+                    console.log(`Hooray ${participant.identity}`);
+                    const videoTrackPub = Array.from(participant.videoTrackPublications.values())[0];
+                    if (videoTrackPub && videoTrackPub.track) {
+                        this.attachVideoTrack(videoTrackPub.track, userId);
+                    } else {
+                        // Track not ready yet - mark for later when TrackSubscribed fires
+                        this.pendingProximityUsers.add(userId);
+                        console.log(`Video track not ready for ${userId}, marked as pending`);
+                    }
+                } else {
+                    // Participant not connected yet - mark for later
+                    this.pendingProximityUsers.add(userId);
+                    console.log(`Participant ${userId} not connected yet, marked as pending`);
+                }
             }
 
-            const participant = this.remoteParticipants.get(userId);
-            if (participant) {
-                // Find video track
-                const videoTrackPub = Array.from(participant.videoTrackPublications.values())[0];
-                if (videoTrackPub && videoTrackPub.track) {
-                    this.attachVideoTrack(videoTrackPub.track, userId);
-                } else {
-                    // Track not ready yet - mark for later when TrackSubscribed fires
-                    this.pendingProximityUsers.add(userId);
-                    console.log(`Video track not ready for ${userId}, marked as pending`);
-                }
-            } else {
-                // Participant not connected yet - mark for later
-                this.pendingProximityUsers.add(userId);
-                console.log(`Participant ${userId} not connected yet, marked as pending`);
-            }
         });
     }
 
@@ -403,6 +455,12 @@ class PhaserVideoManager {
     }
 
     cleanup() {
+        // Unsubscribe from proximity updates
+        if (this.proximitySubscription) {
+            this.proximitySubscription.unsubscribe();
+            this.proximitySubscription = null;
+        }
+
         // Remove all video elements with proper cleanup
         this.videoElements.forEach(element => {
             const mediaElements = element.querySelectorAll('video');
@@ -446,6 +504,73 @@ class PhaserVideoManager {
     isConnected() {
         return this.room && this.room.state === 'connected';
     }
+
+    // Subscribe to proximity updates from backend via WebSocket
+    subscribeToProximityUpdates(roomId) {
+        if (!this.stompClient) {
+            console.warn('No STOMP client provided, proximity updates will not work');
+            return;
+        }
+
+        const subscription = this.stompClient.subscribe(
+            `/user/queue/${roomId}/video-proximity`,
+            (message) => {
+                try {
+                    const update = JSON.parse(message.body);
+                    this.handleProximityUpdate(update);
+                } catch (error) {
+                    console.error('Error parsing proximity update:', error);
+                }
+            }
+        );
+
+        this.proximitySubscription = subscription;
+        console.log('Subscribed to proximity updates for room:', roomId);
+    }
+
+    // Handle proximity updates from backend
+    handleProximityUpdate(update) {
+        console.log('Received proximity update:', update);
+
+        // Handle the moving user's update (has newProximityPlayers/leavingPlayers)
+        if (update.newProximityPlayers !== undefined) {
+            const entering = Array.isArray(update.newProximityPlayers)
+                ? update.newProximityPlayers
+                : Array.from(update.newProximityPlayers);
+            const leaving = Array.isArray(update.leavingPlayers)
+                ? update.leavingPlayers
+                : Array.from(update.leavingPlayers);
+
+            if (entering.length > 0) {
+                console.log('Users entering proximity:', entering);
+                this.handleUsersEnterProximity(entering);
+            }
+
+            if (leaving.length > 0) {
+                console.log('Users leaving proximity:', leaving);
+                this.handleUsersLeaveProximity(leaving);
+            }
+        }
+        // Handle reverse updates (has enteringUsers/leavingUsers)
+        else if (update.enteringUsers !== undefined) {
+            const entering = Array.isArray(update.enteringUsers)
+                ? update.enteringUsers
+                : Array.from(update.enteringUsers);
+            const leaving = Array.isArray(update.leavingUsers)
+                ? update.leavingUsers
+                : Array.from(update.leavingUsers);
+
+            if (entering.length > 0) {
+                console.log('Users entering proximity (reverse):', entering);
+                this.handleUsersEnterProximity(entering);
+            }
+
+            if (leaving.length > 0) {
+                console.log('Users leaving proximity (reverse):', leaving);
+                this.handleUsersLeaveProximity(leaving);
+            }
+        }
+    }
 }
 
-export default PhaserVideoManager
+export default PhaserVideoManager;

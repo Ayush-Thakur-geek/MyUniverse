@@ -695,7 +695,7 @@ class GameScene extends Phaser.Scene {
         this.videoSessionActive = false;
     }
     create() {
-        console.log("Inside the create method");
+        // console.log("Inside the create method");
         // Initialize video manager
         this.videoManager = new (0, _phaserVideoManagerJsDefault.default)(this);
         (0, _webSocJsDefault.default).setVideoManager(this.videoManager);
@@ -705,7 +705,7 @@ class GameScene extends Phaser.Scene {
             const players = playerState.allPlayers || []; // Fallback to empty array
             // Iterate over `players`, not `playerState`
             players.forEach((player)=>{
-                console.log(`Processing player: ${player.userName}, with room id: ${player.roomId}`);
+                // console.log(`Processing player: ${player.userName}, with room id: ${player.roomId}`);
                 const circle = this.add.circle(player.x, player.y, PLAYER_RADIUS, this.colorsList[Math.floor(Math.random() * 5)]);
                 if (player.userName === currentPlayer.userName) {
                     console.log("Current player:", player.userName);
@@ -718,15 +718,13 @@ class GameScene extends Phaser.Scene {
                     this.cursors = this.input.keyboard.createCursorKeys();
                     (0, _webSocJsDefault.default).setCurrentUser(this.username);
                     (0, _webSocJsDefault.default).requestVideoToken();
-                } else {
-                    console.log("Remote player:", player.userName);
-                    this.remotePlayers.set(player.userName, circle);
-                }
+                } else // console.log("Remote player:", player.userName);
+                this.remotePlayers.set(player.userName, circle);
             });
         };
         (0, _webSocJsDefault.default).joinedPlayerState = (playerState)=>{
-            console.log(`Username of joined player: ${playerState.userName}`);
-            console.log(`Username of local player: ${this.username}`);
+            // console.log(`Username of joined player: ${playerState.userName}`);
+            // console.log(`Username of local player: ${this.username}`)
             if (this.username !== "local" && playerState.userName !== this.username) {
                 console.log("Making of the circle");
                 const circle = this.add.circle(playerState.x, playerState.y, PLAYER_RADIUS, this.colorsList[Math.floor(Math.random() * 5)]);
@@ -734,49 +732,48 @@ class GameScene extends Phaser.Scene {
             }
         };
         (0, _webSocJsDefault.default).playerMovedState = (playerState)=>{
-            console.log("updating the state of the moved state");
+            // console.log("updating the state of the moved state")
             let movedUsername = playerState.userName;
             if (this.username !== "local" && this.username !== movedUsername) {
                 let remotePlayerCircle = this.remotePlayers.get(movedUsername);
-                console.log(`The circle of ${playerState.userName}: ${remotePlayerCircle}`);
+                // console.log(`The circle of ${playerState.userName}: ${remotePlayerCircle}`);
                 if (remotePlayerCircle) {
                     remotePlayerCircle.x = playerState.x;
                     remotePlayerCircle.y = playerState.y;
-                    console.log(`Updated ${movedUsername} position to (${playerState.x}, ${playerState.y})`);
-                } else console.log("Remote player not found");
+                // console.log(`Updated ${movedUsername} position to (${playerState.x}, ${playerState.y})`);
+                }
             }
         };
         // Fix 3: Enhanced onCanMove callback
         (0, _webSocJsDefault.default).onCanMove = (allowed)=>{
             this.movePending = false;
             if (!allowed) {
-                console.log("Move not allowed, reverting position");
+                // console.log("Move not allowed, reverting position");
                 // Move not allowed: revert to previous position
                 this.player.x = this.prevPlayerX;
                 this.player.y = this.prevPlayerY;
-            } else console.log("Move allowed, position confirmed");
+            }
         };
         // Video-related callbacks
         (0, _webSocJsDefault.default).onVideoSession = (videoSessionData)=>{
-            // if (videoSessionData.success) {
-            //     console.log("Video session was successfully: ", videoSessionData);
-            //     this.initializeVideoSession(videoSessionData);
-            // } else {
-            //     console.error("Failed to get video session:", videoSessionData.error);
-            // }
             this.initializeVideoSession(videoSessionData);
         };
         (0, _webSocJsDefault.default).onVideoProximityUpdate = (proximityUpdate)=>{
-            if (proximityUpdate.targetUser === this.username) {
-                if (proximityUpdate.enteringUsers.length > 0) {
-                    console.log("Users entering proximity:", proximityUpdate.enteringUsers);
-                    this.videoManager.handleUsersEnterProximity(proximityUpdate.enteringUsers);
-                }
-                if (proximityUpdate.leavingUsers.length > 0) {
-                    console.log("Users leaving proximity:", proximityUpdate.leavingUsers);
-                    this.videoManager.handleUsersLeaveProximity(proximityUpdate.leavingUsers);
-                }
+            // if (proximityUpdate.userName === this.username) {
+            //     if (proximityUpdate.newProximityPlayers.length > 0) {
+            //         console.log(`Users entering proximity of user: ${this.username} are: ${proximityUpdate.newProximityPlayers}`);
+            //         this.videoManager.handleUsersEnterProximity(proximityUpdate.newProximityPlayers);
+            //     }
+            //     if (proximityUpdate.leavingPlayers.length> 0) {
+            //         console.log(`Users leaving leaving proximity of user: ${this.username} are: ${proximityUpdate.leavingPlayers}`);
+            //     }
+            // }
+            console.log(`In method onVideoProximityUpdate`);
+            if (proximityUpdate.get("userName") === this.username && proximityUpdate.get("newProximityPlayers")?.length > 0) {
+                console.log(`Users entering proximity of user: ${this.username} are: ${proximityUpdate.get("newProximityPlayers")}`);
+                this.videoManager.handleUsersEnterProximity(proximityUpdate.newProximityPlayers);
             }
+            if (proximityUpdate.get("leavingPlayers")?.length > 0) console.log(`Users leaving proximity of user: ${this.username} are: ${proximityUpdate.leavingPlayers}`);
         };
         (0, _webSocJsDefault.default).onPlayerLeft = (leftPlayer)=>{
             console.log("Player left the game:", leftPlayer.userName);
@@ -869,7 +866,7 @@ class GameScene extends Phaser.Scene {
                 avatarId: this.avatarId,
                 roomId: this.roomId
             };
-            console.log(`Sending player state:`, playerState);
+            // console.log(`Sending player state:`, playerState);
             (0, _webSocJsDefault.default).sendPlayerPosition(playerState);
         }
     }
@@ -893,7 +890,7 @@ const config = {
 const gameScene = new Phaser.Game(config);
 exports.default = gameScene;
 
-},{"./webSoc.js":"abkGa","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","./PhaserVideoManager.js":"3mkD2"}],"abkGa":[function(require,module,exports,__globalThis) {
+},{"./webSoc.js":"abkGa","./PhaserVideoManager.js":"3mkD2","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"abkGa":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _sockjsClient = require("sockjs-client");
@@ -913,28 +910,26 @@ class GameWebSocket {
         this.stompClient.connect({}, (frame)=>{
             console.log("Connected: ", frame);
             this.stompClient.subscribe(`/topic/${this.roomId}/player-joined`, (message)=>{
-                console.log("player-joined endpoint");
+                // console.log("player-joined endpoint")
                 const joinedPlayer = JSON.parse(message.body);
                 this.stompClient.send(`/app/${this.roomId}/join`, {}, JSON.stringify(joinedPlayer));
                 if (this.joinedPlayerState) this.joinedPlayerState(joinedPlayer);
             });
             this.stompClient.subscribe(`/topic/${this.roomId}/canMove`, (message)=>{
                 const reply = JSON.parse(message.body);
-                console.log("canMove", reply);
+                // console.log("canMove", reply);
                 if (this.onCanMove) this.onCanMove(reply);
             });
             this.stompClient.subscribe(`/topic/${roomId}/position`, (message)=>{
-                console.log("Movement suspected");
+                // console.log("Movement suspected");
                 const playerMoved = JSON.parse(message.body);
-                if (this.playerMovedState) {
-                    console.log("true");
-                    this.playerMovedState(playerMoved);
-                } else console.log("false");
+                if (this.playerMovedState) // console.log("true");
+                this.playerMovedState(playerMoved);
             });
             // New video-related subscriptions
             this.stompClient.subscribe(`/user/queue/${this.roomId}/video-token`, (message)=>{
                 const videoSessionData = JSON.parse(message.body);
-                console.log("Video session data received:", videoSessionData);
+                // console.log("Video session data received:", videoSessionData);
                 if (this.onVideoSession) this.onVideoSession(videoSessionData);
             });
             this.stompClient.subscribe(`/user/queue/${this.roomId}/video-proximity`, (message)=>{
@@ -976,7 +971,37 @@ class GameWebSocket {
 const gameWebSocket = new GameWebSocket();
 exports.default = gameWebSocket;
 
-},{"sockjs-client":"8QRAl","@stomp/stompjs":"aU6gZ","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"8QRAl":[function(require,module,exports,__globalThis) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","sockjs-client":"8QRAl","@stomp/stompjs":"aU6gZ"}],"jnFvT":[function(require,module,exports,__globalThis) {
+exports.interopDefault = function(a) {
+    return a && a.__esModule ? a : {
+        default: a
+    };
+};
+exports.defineInteropFlag = function(a) {
+    Object.defineProperty(a, '__esModule', {
+        value: true
+    });
+};
+exports.exportAll = function(source, dest) {
+    Object.keys(source).forEach(function(key) {
+        if (key === 'default' || key === '__esModule' || Object.prototype.hasOwnProperty.call(dest, key)) return;
+        Object.defineProperty(dest, key, {
+            enumerable: true,
+            get: function() {
+                return source[key];
+            }
+        });
+    });
+    return dest;
+};
+exports.export = function(dest, destName, get) {
+    Object.defineProperty(dest, destName, {
+        enumerable: true,
+        get: get
+    });
+};
+
+},{}],"8QRAl":[function(require,module,exports,__globalThis) {
 var global = arguments[3];
 'use strict';
 var transportList = require("63ebbe5b200a6200");
@@ -6433,36 +6458,6 @@ module.exports = FacadeJS;
     exports1.Versions = Versions;
 });
 
-},{}],"jnFvT":[function(require,module,exports,__globalThis) {
-exports.interopDefault = function(a) {
-    return a && a.__esModule ? a : {
-        default: a
-    };
-};
-exports.defineInteropFlag = function(a) {
-    Object.defineProperty(a, '__esModule', {
-        value: true
-    });
-};
-exports.exportAll = function(source, dest) {
-    Object.keys(source).forEach(function(key) {
-        if (key === 'default' || key === '__esModule' || Object.prototype.hasOwnProperty.call(dest, key)) return;
-        Object.defineProperty(dest, key, {
-            enumerable: true,
-            get: function() {
-                return source[key];
-            }
-        });
-    });
-    return dest;
-};
-exports.export = function(dest, destName, get) {
-    Object.defineProperty(dest, destName, {
-        enumerable: true,
-        get: get
-    });
-};
-
 },{}],"3mkD2":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
@@ -6502,9 +6497,13 @@ class PhaserVideoManager {
             });
             // Set up event handlers BEFORE connecting
             this.setupEventHandlers();
+            // Subscribe to proximity updates from backend
+            this.subscribeToProximityUpdates(roomId);
             // Connect to room
             await this.room.connect('ws://localhost:7880', token);
             console.log('Connected to LiveKit room:', this.room.name);
+            // Process already-connected participants
+            this.processExistingParticipants();
             // Enable camera and microphone
             try {
                 await this.room.localParticipant.enableCameraAndMicrophone();
@@ -6523,7 +6522,9 @@ class PhaserVideoManager {
         // Handle participant connected
         this.room.on((0, _livekitClient.RoomEvent).ParticipantConnected, (participant)=>{
             console.log('Participant connected:', participant.identity);
+            console.log(`prev size of remoteParticipants: ${this.remoteParticipants.size}`);
             this.remoteParticipants.set(participant.identity, participant);
+            console.log(`new size of remoteParticipants: ${this.remoteParticipants.size}`);
         });
         // Handle participant disconnected
         this.room.on((0, _livekitClient.RoomEvent).ParticipantDisconnected, (participant)=>{
@@ -6619,6 +6620,37 @@ class PhaserVideoManager {
         document.body.appendChild(container);
         console.log('Local video element created');
     }
+    processExistingParticipants() {
+        console.log('Processing existing participants in room');
+        // Add all existing remote participants to our map
+        this.room.remoteParticipants.forEach((participant, identity)=>{
+            console.log('Found existing participant:', identity);
+            console.log(`prev size of remoteParticipants: ${this.remoteParticipants.size}`);
+            this.remoteParticipants.set(identity, participant);
+            console.log(`new size of remoteParticipants: ${this.remoteParticipants.size}`);
+            // Process their already-published tracks
+            this.processParticipantTracks(participant);
+        });
+    }
+    processParticipantTracks(participant) {
+        // Process video tracks
+        participant.videoTrackPublications.forEach((publication)=>{
+            if (publication.isSubscribed && publication.track) {
+                console.log(`Processing existing video track for ${participant.identity}`);
+                if (this.isUserInProximity(participant.identity) || this.pendingProximityUsers.has(participant.identity)) {
+                    this.attachVideoTrack(publication.track, participant.identity);
+                    this.pendingProximityUsers.delete(participant.identity);
+                }
+            }
+        });
+        // Process audio tracks
+        participant.audioTrackPublications.forEach((publication)=>{
+            if (publication.isSubscribed && publication.track) {
+                console.log(`Processing existing audio track for ${participant.identity}`);
+                this.attachAudioTrack(publication.track, participant.identity);
+            }
+        });
+    }
     attachVideoTrack(track, userId) {
         try {
             // Remove existing video if any
@@ -6707,21 +6739,27 @@ class PhaserVideoManager {
     }
     handleUsersEnterProximity(userIds) {
         userIds.forEach((userId)=>{
-            if (this.subscribedTracks.has(userId)) return; // Already showing video
-            const participant = this.remoteParticipants.get(userId);
-            if (participant) {
-                // Find video track
-                const videoTrackPub = Array.from(participant.videoTrackPublications.values())[0];
-                if (videoTrackPub && videoTrackPub.track) this.attachVideoTrack(videoTrackPub.track, userId);
-                else {
-                    // Track not ready yet - mark for later when TrackSubscribed fires
+            console.log(`${this.localUserId} ------ ${userId}`);
+            if (userId !== this.localUserId) {
+                console.log('User enter proximity:', userId);
+                if (this.subscribedTracks.has(userId)) return; // Already showing video
+                const participant = this.remoteParticipants.get(userId);
+                console.log(`checking for availability ${participant.identity}`);
+                if (participant) {
+                    // Find video track
+                    console.log(`Hooray ${participant.identity}`);
+                    const videoTrackPub = Array.from(participant.videoTrackPublications.values())[0];
+                    if (videoTrackPub && videoTrackPub.track) this.attachVideoTrack(videoTrackPub.track, userId);
+                    else {
+                        // Track not ready yet - mark for later when TrackSubscribed fires
+                        this.pendingProximityUsers.add(userId);
+                        console.log(`Video track not ready for ${userId}, marked as pending`);
+                    }
+                } else {
+                    // Participant not connected yet - mark for later
                     this.pendingProximityUsers.add(userId);
-                    console.log(`Video track not ready for ${userId}, marked as pending`);
+                    console.log(`Participant ${userId} not connected yet, marked as pending`);
                 }
-            } else {
-                // Participant not connected yet - mark for later
-                this.pendingProximityUsers.add(userId);
-                console.log(`Participant ${userId} not connected yet, marked as pending`);
             }
         });
     }
@@ -6794,6 +6832,11 @@ class PhaserVideoManager {
         });
     }
     cleanup() {
+        // Unsubscribe from proximity updates
+        if (this.proximitySubscription) {
+            this.proximitySubscription.unsubscribe();
+            this.proximitySubscription = null;
+        }
         // Remove all video elements with proper cleanup
         this.videoElements.forEach((element)=>{
             const mediaElements = element.querySelectorAll('video');
@@ -6829,10 +6872,55 @@ class PhaserVideoManager {
     isConnected() {
         return this.room && this.room.state === 'connected';
     }
+    // Subscribe to proximity updates from backend via WebSocket
+    subscribeToProximityUpdates(roomId) {
+        if (!this.stompClient) {
+            console.warn('No STOMP client provided, proximity updates will not work');
+            return;
+        }
+        const subscription = this.stompClient.subscribe(`/user/queue/${roomId}/video-proximity`, (message)=>{
+            try {
+                const update = JSON.parse(message.body);
+                this.handleProximityUpdate(update);
+            } catch (error) {
+                console.error('Error parsing proximity update:', error);
+            }
+        });
+        this.proximitySubscription = subscription;
+        console.log('Subscribed to proximity updates for room:', roomId);
+    }
+    // Handle proximity updates from backend
+    handleProximityUpdate(update) {
+        console.log('Received proximity update:', update);
+        // Handle the moving user's update (has newProximityPlayers/leavingPlayers)
+        if (update.newProximityPlayers !== undefined) {
+            const entering = Array.isArray(update.newProximityPlayers) ? update.newProximityPlayers : Array.from(update.newProximityPlayers);
+            const leaving = Array.isArray(update.leavingPlayers) ? update.leavingPlayers : Array.from(update.leavingPlayers);
+            if (entering.length > 0) {
+                console.log('Users entering proximity:', entering);
+                this.handleUsersEnterProximity(entering);
+            }
+            if (leaving.length > 0) {
+                console.log('Users leaving proximity:', leaving);
+                this.handleUsersLeaveProximity(leaving);
+            }
+        } else if (update.enteringUsers !== undefined) {
+            const entering = Array.isArray(update.enteringUsers) ? update.enteringUsers : Array.from(update.enteringUsers);
+            const leaving = Array.isArray(update.leavingUsers) ? update.leavingUsers : Array.from(update.leavingUsers);
+            if (entering.length > 0) {
+                console.log('Users entering proximity (reverse):', entering);
+                this.handleUsersEnterProximity(entering);
+            }
+            if (leaving.length > 0) {
+                console.log('Users leaving proximity (reverse):', leaving);
+                this.handleUsersLeaveProximity(leaving);
+            }
+        }
+    }
 }
 exports.default = PhaserVideoManager;
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","livekit-client":"2Xckm"}],"2Xckm":[function(require,module,exports,__globalThis) {
+},{"livekit-client":"2Xckm","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"2Xckm":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "AudioPresets", ()=>AudioPresets);
