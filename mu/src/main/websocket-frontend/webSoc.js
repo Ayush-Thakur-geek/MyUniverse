@@ -48,7 +48,7 @@ class GameWebSocket {
             });
 
             // New video-related subscriptions
-            this.stompClient.subscribe(`/user/queue/${this.roomId}/video-session`, (message) => {
+            this.stompClient.subscribe(`/user/queue/${this.roomId}/video-token`, (message) => {
                 const videoSessionData = JSON.parse(message.body);
                 console.log("Video session data received:", videoSessionData);
                 if (this.onVideoSession) {
@@ -80,6 +80,12 @@ class GameWebSocket {
             });
         });
     }
+
+    requestVideoToken() {
+        console.log("Request Video Token");
+        this.stompClient.send(`/app/${this.roomId}/request-token`, {}, JSON.stringify());
+    }
+
     sendPlayerPosition(playerState) {
         if (this.stompClient && this.stompClient.connected) {
             this.stompClient.send(`/app/${this.roomId}/move`, {}, JSON.stringify(playerState))

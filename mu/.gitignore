@@ -4,7 +4,7 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 node_modules
-
+./src/main/websocket-frontend/node_modules
 
 src/main/resources/application.yaml
 

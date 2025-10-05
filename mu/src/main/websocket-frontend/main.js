@@ -51,6 +51,8 @@ class GameScene extends Phaser.Scene {
                     this.physics.add.existing(this.player);
                     this.player.body.setCollideWorldBounds(true);
                     this.cursors = this.input.keyboard.createCursorKeys();
+                    gameWebSocket.setCurrentUser(this.username);
+                    gameWebSocket.requestVideoToken();
                 } else {
                     console.log("Remote player:", player.userName);
                     this.remotePlayers.set(player.userName, circle);
@@ -113,11 +115,13 @@ class GameScene extends Phaser.Scene {
 
         // Video-related callbacks
         gameWebSocket.onVideoSession = (videoSessionData) => {
-            if (videoSessionData.success) {
-                this.initializeVideoSession(videoSessionData);
-            } else {
-                console.error("Failed to get video session:", videoSessionData.error);
-            }
+            // if (videoSessionData.success) {
+            //     console.log("Video session was successfully: ", videoSessionData);
+            //     this.initializeVideoSession(videoSessionData);
+            // } else {
+            //     console.error("Failed to get video session:", videoSessionData.error);
+            // }
+            this.initializeVideoSession(videoSessionData);
         };
 
         gameWebSocket.onVideoProximityUpdate = (proximityUpdate) => {
@@ -157,23 +161,24 @@ class GameScene extends Phaser.Scene {
 
     async initializeVideoSession(videoSessionData) {
         try {
+            console.log("Initialized video session:", videoSessionData);
             const success = await this.videoManager.initializeSession(
-                videoSessionData.sessionId,
+                videoSessionData.roomId,
                 videoSessionData.token,
                 this.username
             );
 
             if (success) {
                 this.videoSessionActive = true;
-                this.updateUIStatus('🟢 Video Connected');
+                // this.updateUIStatus('🟢 Video Connected');
                 console.log('Video session initialized in game scene');
             } else {
-                this.updateUIStatus('🔴 Video Failed');
+                // this.updateUIStatus('🔴 Video Failed');
             }
 
         } catch (error) {
             console.error('Failed to initialize video session in game scene:', error);
-            this.updateUIStatus('🔴 Video Error');
+            // this.updateUIStatus('🔴 Video Error');
         }
     }
 

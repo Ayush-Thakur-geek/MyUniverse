@@ -70,30 +70,30 @@ public class GameController {
         headerAccessor.getSessionAttributes().put("roomId", roomId);
     }
 
-    @MessageMapping("{roomId}/request-video-session")
+    @MessageMapping("/{roomId}/request-token")
     public void requestVideoSession(
             @DestinationVariable String roomId,
-            @Payload PlayerState playerState,
             Principal principal
     ) {
-        String userName = principal.getName();
-        log.info("Video session requested by {} in room {}", userName, roomId);
+        System.out.println("Haha this is a log");
+        String username = principal.getName();
+        log.info("Token requested by {} in room {}", username, roomId);
         try {
-            Map<String, Object> videoSessionData = gameStateService.createVideoSession(roomId, userName);
+            Map<String, Object> token = gameStateService.createVideoSession(roomId, username);
 
             // Send video session info to the requesting user
-            messagingTemplate.convertAndSendToUser(userName, "/queue/" + roomId + "/video-session", videoSessionData);
+            messagingTemplate.convertAndSendToUser(username, "/queue/" + roomId + "/video-token", token);
 
-            log.info("Video session data sent to user {} in room {}", userName, roomId);
+            log.info("Video session data sent to user {} in room {}", username, roomId);
 
         } catch (Exception e) {
-            log.error("Failed to create video session for user {} in room {}", userName, roomId, e);
+            log.error("Failed to create video session for user {} in room {}", username, roomId, e);
 
             Map<String, Object> errorResponse = Map.of(
                     "success", false,
                     "error", "Failed to create video session: " + e.getMessage()
             );
-            messagingTemplate.convertAndSendToUser(userName, "/queue/" + roomId + "/video-session", errorResponse);
+            messagingTemplate.convertAndSendToUser(username, "/queue/" + roomId + "/video-token", errorResponse);
         }
     }
 

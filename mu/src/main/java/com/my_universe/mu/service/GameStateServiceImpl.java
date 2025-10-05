@@ -1,10 +1,14 @@
 package com.my_universe.mu.service;
 
+import com.my_universe.mu.dtos.TokenRequestDto;
 import com.my_universe.mu.model.PlayerState;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,14 +30,17 @@ public class GameStateServiceImpl implements GameStateService {
 
     private final SimpMessagingTemplate messagingTemplate;
 
+    private final RestTemplate  restTemplate;
+
     ExecutorService executor = Executors.newFixedThreadPool(10);
 
-    GameStateServiceImpl(RoomService roomService, SimpMessagingTemplate messagingTemplate) {
+    GameStateServiceImpl(RoomService roomService, SimpMessagingTemplate messagingTemplate,  RestTemplate restTemplate) {
         this.roomService = roomService;
         roomPlayerMap = new ConcurrentHashMap<>();
         roomGridMap = new ConcurrentHashMap<>();
         roomProximityMap = new ConcurrentHashMap<>();
         this.messagingTemplate = messagingTemplate;
+        this.restTemplate = restTemplate;
     }
     int numBlocksX = 800/100;
     int numBlocksY = 600/100;
@@ -229,7 +236,15 @@ public class GameStateServiceImpl implements GameStateService {
 
     @Override
     public Map<String, Object> createVideoSession(String roomId, String userName) {
-        return null;
+        TokenRequestDto dto = new TokenRequestDto(userName, roomId);
+
+        // POST to the RTC server with DTO as body, expecting Map response
+        ResponseEntity<Map> resp = restTemplate.postForEntity(
+                "http://localhost:9090/token",
+                dto,
+                Map.class
+        );
+        return resp.getBody();
     }
 
     @Override
