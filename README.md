@@ -20,12 +20,15 @@ Large multiplayer environments typically struggle with player proximity detectio
 ### My Universe uses a clever solution:
 
 <u>Geohashing for Fast Spatial Indexing</u>
+
 <b>What is Geohashing?</b>
 
 - Geohashing encodes two-dimensional coordinates (x, y) into short, unique strings—the geohashes.
 - The space is divided into a grid, and each cell gets a code. Players within the same or adjacent geohash are spatially near each other.
 - Nearby players are located by comparing geohashes—much faster than comparing all coordinates directly.
+
 <b>How it Works in My Universe</b>
+
 1. Grid Encoding:
    - Every player’s position is transformed into a geohash at a chosen precision (grid size).
 
