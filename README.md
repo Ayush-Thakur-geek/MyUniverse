@@ -1,7 +1,7 @@
-#🌌 My Universe
+# 🌌 My Universe
 My Universe is a real-time, multiplayer virtual space where users interact, collaborate, and move freely as unique avatars. Leveraging scalable design, advanced WebRTC video, and instant proximity-based networking, it’s built to handle both creativity and community—at scale.
 
-##🚀 Features
+## 🚀 Features
 Live Multiplayer World:
 Effortlessly connect with others in a shared digital universe, with instant audio/video chat based on proximity.
 
@@ -14,7 +14,7 @@ Effortlessly connect with others in a shared digital universe, with instant audi
 - Future-Proof:
   Built with the latest web technology stack (Spring Boot, WebRTC, Web Sockets).
 
-##⚡ Performance: From O(n²) to O(1) Proximity Lookups
+## ⚡ Performance: From O(n²) to O(1) Proximity Lookups
 Large multiplayer environments typically struggle with player proximity detection. The naive way checks every player against every other player (O(n^2))—which grinds to a halt as the universe grows.
 
 ### My Universe uses a clever solution:
@@ -23,11 +23,8 @@ Large multiplayer environments typically struggle with player proximity detectio
 <b>What is Geohashing?</b>
 
 - Geohashing encodes two-dimensional coordinates (x, y) into short, unique strings—the geohashes.
-- 
 - The space is divided into a grid, and each cell gets a code. Players within the same or adjacent geohash are spatially near each other.
-- 
 - Nearby players are located by comparing geohashes—much faster than comparing all coordinates directly.
-- 
 <b>How it Works in My Universe</b>
 1. Grid Encoding:
    - Every player’s position is transformed into a geohash at a chosen precision (grid size).
@@ -44,7 +41,7 @@ Large multiplayer environments typically struggle with player proximity detectio
 4. Result:
    - Dramatic reduction in server and network computation, enabling real real-time interaction, even at massive scale!
 
-Visualization Example
+<b>Visualization Example</b>
 - Old way:
   - Player A moves → check every player: “Am I near A?”
   - Expensive as user count grows.
