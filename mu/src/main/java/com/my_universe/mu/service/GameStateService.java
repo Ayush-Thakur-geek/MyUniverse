@@ -18,4 +18,6 @@ public interface GameStateService {
     boolean playerExists(String roomId, String username);
 
     public Map<String, Object> createVideoSession(String roomId, String userName);
+
+    public PlayerState getPlayer(String roomId, String username);
 }

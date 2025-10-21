@@ -403,6 +403,17 @@ class PhaserVideoManager {
         }
     }
 
+    removeUser(userId) {
+        this.removeAudioElement(userId);
+        this.removeVideoElement(userId);
+        console.log(`local player: ${this.localUserId} & removed player: ${userId}`);
+        if (userId !== this.localUserId) {
+            this.remoteParticipants.delete(userId);
+        } else {
+            console.log("Something unexpected Ayyy....")
+        }
+    }
+
     toggleVideo() {
         const localVideoPub = Array.from(this.room.localParticipant.videoTrackPublications.values())[0];
         if (localVideoPub) {
