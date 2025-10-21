@@ -718,8 +718,11 @@ class GameScene extends Phaser.Scene {
                     this.cursors = this.input.keyboard.createCursorKeys();
                     (0, _webSocJsDefault.default).setCurrentUser(this.username);
                     (0, _webSocJsDefault.default).requestVideoToken();
-                } else // console.log("Remote player:", player.userName);
-                this.remotePlayers.set(player.userName, circle);
+                } else {
+                    console.log(`Circle Added: ${circle}`);
+                    // console.log("Remote player:", player.userName);
+                    this.remotePlayers.set(player.userName, circle);
+                }
             });
         };
         (0, _webSocJsDefault.default).joinedPlayerState = (playerState)=>{
@@ -728,6 +731,7 @@ class GameScene extends Phaser.Scene {
             if (this.username !== "local" && playerState.userName !== this.username) {
                 console.log("Making of the circle");
                 const circle = this.add.circle(playerState.x, playerState.y, PLAYER_RADIUS, this.colorsList[Math.floor(Math.random() * 5)]);
+                console.log(`Circle Added: ${circle}`);
                 this.remotePlayers.set(playerState.userName, circle);
             }
         };
@@ -759,32 +763,32 @@ class GameScene extends Phaser.Scene {
             this.initializeVideoSession(videoSessionData);
         };
         (0, _webSocJsDefault.default).onVideoProximityUpdate = (proximityUpdate)=>{
-            // if (proximityUpdate.userName === this.username) {
-            //     if (proximityUpdate.newProximityPlayers.length > 0) {
-            //         console.log(`Users entering proximity of user: ${this.username} are: ${proximityUpdate.newProximityPlayers}`);
-            //         this.videoManager.handleUsersEnterProximity(proximityUpdate.newProximityPlayers);
-            //     }
-            //     if (proximityUpdate.leavingPlayers.length> 0) {
-            //         console.log(`Users leaving leaving proximity of user: ${this.username} are: ${proximityUpdate.leavingPlayers}`);
-            //     }
-            // }
-            console.log(`In method onVideoProximityUpdate`);
-            if (proximityUpdate.get("userName") === this.username && proximityUpdate.get("newProximityPlayers")?.length > 0) {
-                console.log(`Users entering proximity of user: ${this.username} are: ${proximityUpdate.get("newProximityPlayers")}`);
-                this.videoManager.handleUsersEnterProximity(proximityUpdate.newProximityPlayers);
+            console.log(`In method onVideoProximityUpdate`, proximityUpdate);
+            // Access object properties directly, not with .get()
+            if (proximityUpdate.userName === this.username && proximityUpdate.newProximityPlayers?.length > 0) {
+                console.log(`Users entering proximity of user: ${this.username} are:`, proximityUpdate.newProximityPlayers);
+                this.videoManager.handleUsersEnterProximity(Array.from(proximityUpdate.newProximityPlayers));
             }
-            if (proximityUpdate.get("leavingPlayers")?.length > 0) console.log(`Users leaving proximity of user: ${this.username} are: ${proximityUpdate.leavingPlayers}`);
+            if (proximityUpdate.leavingPlayers?.length > 0) {
+                console.log(`Users leaving proximity of user: ${this.username} are:`, proximityUpdate.leavingPlayers);
+                this.videoManager.handleUsersLeaveProximity(Array.from(proximityUpdate.leavingPlayers));
+            }
         };
         (0, _webSocJsDefault.default).onPlayerLeft = (leftPlayer)=>{
             console.log("Player left the game:", leftPlayer.userName);
             // Remove from remote players
             const playerCircle = this.remotePlayers.get(leftPlayer.userName);
+            console.log(`Circle to be removed ${playerCircle}`);
             if (playerCircle) {
+                console.log(`Circle destroyed player: ${leftPlayer.userName}`);
                 playerCircle.destroy();
                 this.remotePlayers.delete(leftPlayer.userName);
             }
             // Remove from video manager
-            if (this.videoManager) this.videoManager.removeUser(leftPlayer.userName);
+            if (this.videoManager) {
+                console.log(`Now removing ${leftPlayer.userName} from streaming`);
+                this.videoManager.removeUser(leftPlayer.userName);
+            }
         };
         // Setup keyboard controls for video
         this.setupVideoControls();
@@ -6791,6 +6795,13 @@ class PhaserVideoManager {
             this.audioElements.delete(userId);
             console.log('Audio element removed for:', userId);
         }
+    }
+    removeUser(userId) {
+        this.removeAudioElement(userId);
+        this.removeVideoElement(userId);
+        console.log(`local player: ${this.localUserId} & removed player: ${userId}`);
+        if (userId !== this.localUserId) this.remoteParticipants.delete(userId);
+        else console.log("Something unexpected Ayyy....");
     }
     toggleVideo() {
         const localVideoPub = Array.from(this.room.localParticipant.videoTrackPublications.values())[0];

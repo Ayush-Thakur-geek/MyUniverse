@@ -15,6 +15,7 @@ import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.annotation.SubscribeMapping;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
@@ -66,9 +67,6 @@ public class GameController {
                      @Payload PlayerState playerState,
                      SimpMessageHeaderAccessor headerAccessor) {
         System.out.println("player joined called: " + playerState + " of room " + roomId);
-        headerAccessor.getSessionAttributes().put("username", playerState.getUserName());
-        headerAccessor.getSessionAttributes().put("id", playerState.getUserName());
-        headerAccessor.getSessionAttributes().put("roomId", roomId);
     }
 
     @MessageMapping("/{roomId}/request-token")
@@ -100,9 +98,15 @@ public class GameController {
 
     @SubscribeMapping("{roomId}/initial")
     @TimeMonitor
-    public Map<String, Object> sendInitialState(@DestinationVariable String roomId, Principal principal) {
+    public Map<String, Object> sendInitialState(@DestinationVariable String roomId,
+                                                Principal principal,
+                                                SimpMessageHeaderAccessor headerAccessor) {
         System.out.println("Subscribe mapping called!");
         PlayerState initialState = newPlayerState(principal, roomId);
+
+        headerAccessor.getSessionAttributes().put("username", principal.getName());
+        headerAccessor.getSessionAttributes().put("id", principal.getName());
+        headerAccessor.getSessionAttributes().put("roomId", roomId);
 
         if (!gameStateService.playerExists(initialState.getRoomId(), principal.getName())) {
             gameStateService.addPlayer(initialState);

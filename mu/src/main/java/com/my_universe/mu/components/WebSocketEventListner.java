@@ -1,6 +1,7 @@
 package com.my_universe.mu.components;
 
 import com.my_universe.mu.model.GameMessage;
+import com.my_universe.mu.model.PlayerState;
 import com.my_universe.mu.service.GameStateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -17,8 +18,7 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 @Log4j2
 public class WebSocketEventListner {
 
-    @Autowired
-    private GameStateService gameStateService;
+    private final GameStateService gameStateService;
 
     private final SimpMessageSendingOperations messagingTemplate;
 
@@ -50,11 +50,8 @@ public class WebSocketEventListner {
         log.info("User disconnected: {}", username);
 
         if (username != null) {
-            GameMessage gameMessage = GameMessage.builder()
-                    .type(GameMessage.MessageType.LEAVE)
-                    .sender(username)
-                    .build();
-            messagingTemplate.convertAndSend("/topic/chat", gameMessage);
+            PlayerState player = gameStateService.getPlayer(roomId, username);
+            messagingTemplate.convertAndSend("/topic/" + roomId + "/player-left", player);
         }
 
         if (id != null) {

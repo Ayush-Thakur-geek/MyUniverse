@@ -237,7 +237,7 @@ public class GameStateServiceImpl implements GameStateService {
                 reverseUpdate.put("type", "video-proximity-update");
                 reverseUpdate.put("userName", otherUser);
                 reverseUpdate.put("newProximityPlayers", Set.of(userName));
-                reverseUpdate.put("leavingUsers", Collections.emptySet());
+                reverseUpdate.put("leavingPlayers", Collections.emptySet());
                 reverseUpdate.put("timestamp", System.currentTimeMillis());
 
                 messagingTemplate.convertAndSendToUser(otherUser, "/queue/" + roomId + "/video-proximity", reverseUpdate);
@@ -246,9 +246,9 @@ public class GameStateServiceImpl implements GameStateService {
             for (String otherUser : leavingPlayers) {
                 Map<String, Object> reverseUpdate = new HashMap<>();
                 reverseUpdate.put("type", "video-proximity-update");
-                reverseUpdate.put("targetUser", otherUser);
-                reverseUpdate.put("enteringUsers", Collections.emptySet());
-                reverseUpdate.put("leavingUsers", Set.of(userName));
+                reverseUpdate.put("userName", otherUser);
+                reverseUpdate.put("newProximityPlayers", Collections.emptySet());
+                reverseUpdate.put("leavingPlayers", Set.of(userName));
                 reverseUpdate.put("timestamp", System.currentTimeMillis());
 
                 messagingTemplate.convertAndSendToUser(otherUser, "/queue/" + roomId + "/video-proximity", reverseUpdate);
@@ -297,6 +297,14 @@ public class GameStateServiceImpl implements GameStateService {
         }
 
         return player;
+    }
+
+    @Override
+    public PlayerState getPlayer(String roomId, String playerId) {
+        if (!roomPlayerMap.containsKey(roomId)) throw new IllegalArgumentException("Wrong room id");
+        ConcurrentMap<String, PlayerState> players = roomPlayerMap.get(roomId);
+        if (!players.containsKey(playerId)) throw new IllegalArgumentException("Player id " + playerId + " does not exist");
+        return players.get(playerId);
     }
 
     @Override
