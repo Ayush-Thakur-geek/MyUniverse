@@ -67,5 +67,5 @@ Storage: MySQL
   Personalized avatars using generative AI! Users will soon create a unique virtual presence with automatically styled characters—no two the same.
 - Rich World Customization:
   More creative tools for world-building and avatar interaction.
-- Scalable architecture
-  ![Architecture for My Universe 2.0] (./mu/images/2.0_Architecture.png)
+- Scalable architecture:
+  ![Architecture for My Universe 2.0](./mu/images/2.0_Architecture.png)
