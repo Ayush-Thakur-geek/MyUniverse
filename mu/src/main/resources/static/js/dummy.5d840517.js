@@ -975,37 +975,7 @@ class GameWebSocket {
 const gameWebSocket = new GameWebSocket();
 exports.default = gameWebSocket;
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","sockjs-client":"8QRAl","@stomp/stompjs":"aU6gZ"}],"jnFvT":[function(require,module,exports,__globalThis) {
-exports.interopDefault = function(a) {
-    return a && a.__esModule ? a : {
-        default: a
-    };
-};
-exports.defineInteropFlag = function(a) {
-    Object.defineProperty(a, '__esModule', {
-        value: true
-    });
-};
-exports.exportAll = function(source, dest) {
-    Object.keys(source).forEach(function(key) {
-        if (key === 'default' || key === '__esModule' || Object.prototype.hasOwnProperty.call(dest, key)) return;
-        Object.defineProperty(dest, key, {
-            enumerable: true,
-            get: function() {
-                return source[key];
-            }
-        });
-    });
-    return dest;
-};
-exports.export = function(dest, destName, get) {
-    Object.defineProperty(dest, destName, {
-        enumerable: true,
-        get: get
-    });
-};
-
-},{}],"8QRAl":[function(require,module,exports,__globalThis) {
+},{"sockjs-client":"8QRAl","@stomp/stompjs":"aU6gZ","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"8QRAl":[function(require,module,exports,__globalThis) {
 var global = arguments[3];
 'use strict';
 var transportList = require("63ebbe5b200a6200");
@@ -6461,6 +6431,36 @@ module.exports = FacadeJS;
     exports1.StompHeaders = StompHeaders;
     exports1.Versions = Versions;
 });
+
+},{}],"jnFvT":[function(require,module,exports,__globalThis) {
+exports.interopDefault = function(a) {
+    return a && a.__esModule ? a : {
+        default: a
+    };
+};
+exports.defineInteropFlag = function(a) {
+    Object.defineProperty(a, '__esModule', {
+        value: true
+    });
+};
+exports.exportAll = function(source, dest) {
+    Object.keys(source).forEach(function(key) {
+        if (key === 'default' || key === '__esModule' || Object.prototype.hasOwnProperty.call(dest, key)) return;
+        Object.defineProperty(dest, key, {
+            enumerable: true,
+            get: function() {
+                return source[key];
+            }
+        });
+    });
+    return dest;
+};
+exports.export = function(dest, destName, get) {
+    Object.defineProperty(dest, destName, {
+        enumerable: true,
+        get: get
+    });
+};
 
 },{}],"3mkD2":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");

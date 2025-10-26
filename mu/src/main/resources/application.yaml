@@ -21,6 +21,9 @@ spring:
       hibernate:
         format_sql: true
 
+redis:
+  url: "redis://localhost:6379"
+
 cloudinary:
   apiKey: 645868366775829
   apiSecret: ehq83EKh3G0S2ny8vLyQhsblRiI
