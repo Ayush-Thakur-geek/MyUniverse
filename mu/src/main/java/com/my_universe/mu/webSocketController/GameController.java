@@ -70,7 +70,7 @@ public class GameController {
     }
 
     @MessageMapping("/{roomId}/request-token")
-    public void requestVideoSession(
+    public void requestVideoToken(
             @DestinationVariable String roomId,
             Principal principal
     ) {

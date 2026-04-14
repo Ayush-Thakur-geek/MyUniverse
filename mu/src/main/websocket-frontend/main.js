@@ -127,6 +127,7 @@ class GameScene extends Phaser.Scene {
             // Access object properties directly, not with .get()
             if (proximityUpdate.userName === this.username && proximityUpdate.newProximityPlayers?.length > 0) {
                 console.log(`Users entering proximity of user: ${this.username} are:`, proximityUpdate.newProximityPlayers);
+                this.proximityUsers = proximityUpdate.newProximityPlayers
                 this.videoManager.handleUsersEnterProximity(Array.from(proximityUpdate.newProximityPlayers));
             }
 
@@ -210,6 +211,18 @@ class GameScene extends Phaser.Scene {
                 gameWebSocket.requestVideoSession();
             }
         });
+
+        this.input.keyboard.on('keydown-S', () => {
+            if (this.videoSessionActive && this.videoManager) {
+                if (!this.videoManager.screenShareActive) {
+                    console.log('requesting screen share...')
+                    this.videoManager.startScreenShare();
+                } else {
+                    console.log('stopping screen share...');
+                    this.videoManager.stopScreenShare();
+                }
+            }
+        })
     }
 
     update() {

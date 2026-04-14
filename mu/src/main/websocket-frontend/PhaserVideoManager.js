@@ -12,6 +12,7 @@ class PhaserVideoManager {
         this.audioElements = new Map(); // Track audio elements for cleanup
         this.subscribedTracks = new Map();
         this.pendingProximityUsers = new Set(); // Handle race conditions
+        this.screenShareActive = false;
     }
 
     async initializeSession(roomId, token, userId) {
@@ -581,6 +582,43 @@ class PhaserVideoManager {
                 this.handleUsersLeaveProximity(leaving);
             }
         }
+    }
+
+    async startScreenShare() {
+        try {
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                video: true
+            });
+
+            const screenTrack = screenStream.getVideoTracks()[0];
+
+            await this.room.localParticipant.publishTrack(screenTrack, {
+                source: Track.Source.ScreenShare,
+                name: 'screen'
+            });
+
+            screenTrack.addEventListener('ended', () => {
+                this.stopScreenShare();
+            });
+
+            this.screenShareActive = true;
+            console.log('ScreenShare started');
+
+        } catch (err) {
+            console.error(err.message);
+        }
+    }
+
+    async stopScreenShare() {
+        const screenPub = Array.from(this.room.localParticipant.videoTrackPublications.values())
+            .find(pub => pub.source === Track.Source.ScreenShare);
+
+        if (screenPub) {
+            await this.room.localParticipant.unpublishTrack(screenPub.track);
+        }
+
+        this.screenShareActive = false;
+        console.log('ScreenShare stopped');
     }
 }
 
