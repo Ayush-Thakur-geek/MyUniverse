@@ -142,6 +142,13 @@
 			<scope>implementation</scope>
 		</dependency>
 
+        <!-- https://mvnrepository.com/artifact/redis.clients/jedis -->
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>7.0.0</version>
+        </dependency>
+
         <!-- https://mvnrepository.com/artifact/net.devh/grpc-server-spring-boot-starter -->
 <!--        <dependency>-->
 <!--            <groupId>net.devh</groupId>-->

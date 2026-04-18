@@ -127,6 +127,7 @@ class GameScene extends Phaser.Scene {
             // Access object properties directly, not with .get()
             if (proximityUpdate.userName === this.username && proximityUpdate.newProximityPlayers?.length > 0) {
                 console.log(`Users entering proximity of user: ${this.username} are:`, proximityUpdate.newProximityPlayers);
+                this.proximityUsers = proximityUpdate.newProximityPlayers
                 this.videoManager.handleUsersEnterProximity(Array.from(proximityUpdate.newProximityPlayers));
             }
 
@@ -152,6 +153,33 @@ class GameScene extends Phaser.Scene {
             if (this.videoManager) {
                 console.log(`Now removing ${leftPlayer.userName} from streaming`);
                 this.videoManager.removeUser(leftPlayer.userName);
+            }
+        };
+
+        gameWebSocket.handleClick = (message) => {
+            const { type, clicker, clickedUserId } = message;
+
+            if (type === 'you-were-clicked') {
+                // I am B — someone wants to see my screen
+                console.log(`${clicker} clicked on you — start sharing`);
+                if (this.videoManager && !this.videoManager.screenShareActive) {
+                    this.videoManager.startScreenShare();
+                }
+
+            } else if (type === 'you-clicked-player') {
+                // I am A — show this player's screen to me
+                console.log(`You clicked on ${clickedUserId}`);
+                if (this.videoManager) {
+
+                    const track = this.videoManager.getScreenShareTrack(clickedUserId);
+                    if (track) {
+                        this.videoManager.showScreenShareOverlay(clickedUserId, track);
+                    } else {
+                        // Not sharing yet — wait for their screen track to arrive
+                        this.videoManager.pendingScreenViewFrom = clickedUserId;
+                        console.log(`Waiting for ${clickedUserId} to start sharing...`);
+                    }
+                }
             }
         };
 
@@ -210,6 +238,26 @@ class GameScene extends Phaser.Scene {
                 gameWebSocket.requestVideoSession();
             }
         });
+
+        this.input.keyboard.on('keydown-S', () => {
+            if (this.videoSessionActive && this.videoManager) {
+                if (!this.videoManager.screenShareActive) {
+                    console.log('requesting screen share...')
+                    this.videoManager.startScreenShare();
+                } else {
+                    console.log('stopping screen share...');
+                    this.videoManager.stopScreenShare();
+                }
+            }
+        })
+
+        this.input.on("pointerdown", (event) => {
+            console.log(`Click location x : ${event.pageX} y : ${event.pageY}`);
+            const worldX = event.worldX;
+            const worldY = event.worldY;
+            gameWebSocket.checkTheClickOverlap(this.roomId, this.username, worldX, worldY);
+        });
+
     }
 
     update() {

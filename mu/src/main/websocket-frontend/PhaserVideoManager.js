@@ -12,6 +12,8 @@ class PhaserVideoManager {
         this.audioElements = new Map(); // Track audio elements for cleanup
         this.subscribedTracks = new Map();
         this.pendingProximityUsers = new Set(); // Handle race conditions
+        this.screenShareActive = false;
+        this.pendingScreenViewFrom = null;
     }
 
     async initializeSession(roomId, token, userId) {
@@ -91,10 +93,21 @@ class PhaserVideoManager {
 
             if (track.kind === Track.Kind.Video) {
                 // Check if backend already told us this user is in proximity OR currently in proximity
-                if (this.isUserInProximity(participant.identity) ||
-                    this.pendingProximityUsers.has(participant.identity)) {
+                if (
+                    (this.isUserInProximity(participant.identity) ||
+                    this.pendingProximityUsers.has(participant.identity)) &&
+                    track.source === Track.Source.Camera
+                ) {
                     this.attachVideoTrack(track, participant.identity);
                     this.pendingProximityUsers.delete(participant.identity);
+                } else if (
+                    track.source === Track.Source.ScreenShare
+                ) {
+                    if (this.pendingScreenViewFrom === participant.identity) {
+                        this.showScreenShareOverlay(participant.identity, track);
+                        this.pendingScreenViewFrom = null;
+                    }
+                    return;
                 }
             }
             // Always attach audio regardless of proximity
@@ -114,8 +127,8 @@ class PhaserVideoManager {
         // Handle local track published - create local video AFTER tracks are published
         this.room.on(RoomEvent.LocalTrackPublished, (publication, participant) => {
             console.log(`Local track published: ${publication.kind}`);
-            if (publication.kind === Track.Kind.Video) {
-                this.createLocalVideoElement();
+            if (publication.kind === Track.Kind.Video && publication.source === Track.Source.Camera) {
+                this.createLocalVideoElement().then(r => console.log(r));
             }
         });
 
@@ -136,9 +149,11 @@ class PhaserVideoManager {
         });
     }
 
-    createLocalVideoElement() {
+    async createLocalVideoElement() {
         // Get local video track publication
-        const localVideoTrackPublication = this.room.localParticipant.videoTrackPublications.values().next().value;
+        const localVideoTrackPublication = Array.from(
+            this.room.localParticipant.videoTrackPublications.values()
+        ).find(pub => pub.source === Track.Source.Camera);
 
         if (!localVideoTrackPublication || !localVideoTrackPublication.track) {
             console.warn('No local video track found');
@@ -580,6 +595,197 @@ class PhaserVideoManager {
                 console.log('Users leaving proximity (reverse):', leaving);
                 this.handleUsersLeaveProximity(leaving);
             }
+        }
+    }
+
+    async startScreenShare() {
+        try {
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                video: true
+            });
+
+            const screenTrack = screenStream.getVideoTracks()[0];
+
+            await this.room.localParticipant.publishTrack(screenTrack, {
+                source: Track.Source.ScreenShare,
+                name: 'screen'
+            });
+
+            screenTrack.addEventListener('ended', () => {
+                this.stopScreenShare();
+            });
+
+            this.screenShareActive = true;
+            console.log('ScreenShare started');
+
+        } catch (err) {
+            console.error(err.message);
+        }
+    }
+
+    async stopScreenShare() {
+        const screenPub = Array.from(this.room.localParticipant.videoTrackPublications.values())
+            .find(pub => pub.source === Track.Source.ScreenShare);
+
+        if (screenPub) {
+            await this.room.localParticipant.unpublishTrack(screenPub.track);
+        }
+
+        this.screenShareActive = false;
+        console.log('ScreenShare stopped');
+    }
+
+    isPlayerSharingScreen(userId) {
+        const participant = this.remoteParticipants.get(userId);
+        if (!participant) return false;
+
+        return Array.from(participant.videoTrackPublications.values())
+            .some(pub => pub.source === Track.Source.ScreenShare && !pub.isMuted);
+    }
+
+    getScreenShareTrack(userId) {
+        const participant = this.remoteParticipants.get(userId);
+        if (!participant) return null;
+        if (this.isPlayerSharingScreen(userId)) {
+            const pub = Array.from(participant.videoTrackPublications.values())
+                .find(pub => pub.source === Track.Source.ScreenShare && !pub.isMuted);
+            return pub?.track || null;
+        }
+        console.log(`player ${userId} is not sharing screen`);
+        return null;
+    }
+
+    async showScreenShareOverlay(userId) {
+        console.log('ScreenShare overlay:', userId);
+
+        const clickedUser = this.remoteParticipants.get(userId);
+        if (!clickedUser) {
+            console.warn('Participant not found:', userId);
+            return;
+        }
+
+        // Bug 1 fix: get the track from publication
+        const pub = Array.from(clickedUser.videoTrackPublications.values())
+            .find(pub => pub.source === Track.Source.ScreenShare && !pub.isMuted);
+
+        if (!pub || !pub.track) {
+            console.warn('No screen share track found for:', userId);
+            return;
+        }
+
+        const track = pub.track; // ✅ actual track, not publication
+
+        // Remove existing overlay if any
+        this.removeScreenShareOverlay();
+
+        // Create overlay container
+        const overlay = document.createElement('div');
+        overlay.id = 'screen-share-overlay';
+        overlay.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 480px;
+        height: 360px;
+        border: 3px solid #ff6b6b;
+        border-radius: 8px;
+        overflow: hidden;
+        z-index: 1002;
+        background: #000;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    `;
+
+        // Add label
+        const label = document.createElement('div');
+        label.textContent = `${userId}'s Screen`;
+        label.style.cssText = `
+        position: absolute;
+        bottom: 5px;
+        left: 5px;
+        color: white;
+        font-size: 14px;
+        background: rgba(0,0,0,0.8);
+        padding: 4px 10px;
+        border-radius: 3px;
+        font-weight: bold;
+        z-index: 10;
+    `;
+        overlay.appendChild(label);
+
+        // Close button
+        const closeBtn = document.createElement('div');
+        closeBtn.textContent = '✕';
+        closeBtn.style.cssText = `
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        color: white;
+        font-size: 16px;
+        background: rgba(0,0,0,0.8);
+        padding: 4px 10px;
+        border-radius: 3px;
+        font-weight: bold;
+        z-index: 10;
+        cursor: pointer;
+    `;
+        closeBtn.onclick = () => this.removeScreenShareOverlay();
+        overlay.appendChild(closeBtn);
+
+        // Timer indicator
+        const timer = document.createElement('div');
+        timer.id = 'screen-share-timer';
+        timer.textContent = '10';
+        timer.style.cssText = `
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        color: #ff6b6b;
+        font-size: 18px;
+        background: rgba(0,0,0,0.8);
+        padding: 4px 10px;
+        border-radius: 3px;
+        font-weight: bold;
+        z-index: 10;
+    `;
+        overlay.appendChild(timer);
+
+        // Attach video track
+        const videoElement = track.attach(); // ✅ now correctly calling on track
+        videoElement.style.width = '100%';
+        videoElement.style.height = '100%';
+        videoElement.style.objectFit = 'contain';
+        overlay.insertBefore(videoElement, overlay.firstChild);
+
+        document.body.appendChild(overlay);
+        this.screenShareOverlay = overlay;
+
+        // Bug 2 fix: store interval reference on the instance so removeScreenShareOverlay can clear it
+        let secondsLeft = 10;
+        this.countdownInterval = setInterval(() => {
+            secondsLeft--;
+            const timerEl = document.getElementById('screen-share-timer');
+            if (timerEl) timerEl.textContent = secondsLeft;
+            if (secondsLeft <= 0) {
+                this.removeScreenShareOverlay();
+            }
+        }, 1000);
+
+        console.log('Screen share overlay shown for 10 seconds');
+    }
+
+    removeScreenShareOverlay() {
+        // Bug 2 fix: always clear interval when removing
+        if (this.countdownInterval) {
+            clearInterval(this.countdownInterval);
+            this.countdownInterval = null;
+        }
+
+        if (this.screenShareOverlay) {
+            const mediaElements = this.screenShareOverlay.querySelectorAll('video');
+            mediaElements.forEach(el => el.srcObject = null);
+            this.screenShareOverlay.remove();
+            this.screenShareOverlay = null;
+            console.log('Screen share overlay removed');
         }
     }
 }

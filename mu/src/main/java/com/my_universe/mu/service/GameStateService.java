@@ -20,4 +20,6 @@ public interface GameStateService {
     public Map<String, Object> createVideoSession(String roomId, String userName);
 
     public PlayerState getPlayer(String roomId, String username);
+
+    public String checkCollision(String username, String roomId, int x, int y);
 }
