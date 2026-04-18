@@ -11,8 +11,8 @@ Effortlessly connect with others in a shared digital universe, with instant audi
 - Blazing Fast Proximity Detection:
   Experience near-instant connection/disconnection as you move, powered by intelligent spatial lookup.
 
-- Future-Proof:
-  Built with the latest web technology stack (Spring Boot, WebRTC, Web Sockets).
+- Screen Monitoring:
+  Lets you view the screen of the player you clicked on for 10s.
 
 ## ⚡ Performance: From O(n²) to O(1) Proximity Lookups
 Large multiplayer environments typically struggle with player proximity detection. The naive way checks every player against every other player (O(n^2))—which grinds to a halt as the universe grows.
