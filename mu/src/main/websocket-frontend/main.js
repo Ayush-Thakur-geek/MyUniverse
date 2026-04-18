@@ -156,6 +156,33 @@ class GameScene extends Phaser.Scene {
             }
         };
 
+        gameWebSocket.handleClick = (message) => {
+            const { type, clicker, clickedUserId } = message;
+
+            if (type === 'you-were-clicked') {
+                // I am B — someone wants to see my screen
+                console.log(`${clicker} clicked on you — start sharing`);
+                if (this.videoManager && !this.videoManager.screenShareActive) {
+                    this.videoManager.startScreenShare();
+                }
+
+            } else if (type === 'you-clicked-player') {
+                // I am A — show this player's screen to me
+                console.log(`You clicked on ${clickedUserId}`);
+                if (this.videoManager) {
+
+                    const track = this.videoManager.getScreenShareTrack(clickedUserId);
+                    if (track) {
+                        this.videoManager.showScreenShareOverlay(clickedUserId, track);
+                    } else {
+                        // Not sharing yet — wait for their screen track to arrive
+                        this.videoManager.pendingScreenViewFrom = clickedUserId;
+                        console.log(`Waiting for ${clickedUserId} to start sharing...`);
+                    }
+                }
+            }
+        };
+
         // Setup keyboard controls for video
         this.setupVideoControls();
 
@@ -223,6 +250,14 @@ class GameScene extends Phaser.Scene {
                 }
             }
         })
+
+        this.input.on("pointerdown", (event) => {
+            console.log(`Click location x : ${event.pageX} y : ${event.pageY}`);
+            const worldX = event.worldX;
+            const worldY = event.worldY;
+            gameWebSocket.checkTheClickOverlap(this.roomId, this.username, worldX, worldY);
+        });
+
     }
 
     update() {

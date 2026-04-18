@@ -1,6 +1,7 @@
 package com.my_universe.mu.webSocketController;
 
 import com.my_universe.mu.annotations.TimeMonitor;
+import com.my_universe.mu.dtos.ClickCoordinates;
 import com.my_universe.mu.dtos.LocalParticipantDto;
 import com.my_universe.mu.model.GameMessage;
 import com.my_universe.mu.model.PlayerState;
@@ -93,6 +94,40 @@ public class GameController {
                     "error", "Failed to create video session: " + e.getMessage()
             );
             messagingTemplate.convertAndSendToUser(username, "/queue/" + roomId + "/video-token", errorResponse);
+        }
+    }
+
+    @MessageMapping("/{roomId}/check-overlap")
+    public void checkTheClickOverlap(
+            @DestinationVariable String roomId,
+            Principal principal,
+            @Payload ClickCoordinates clickCoordinates
+    ) {
+        String clicker = principal.getName();
+        String clickedPlayer = gameStateService.checkCollision(
+                clicker, roomId, clickCoordinates.getX(), clickCoordinates.getY()
+        );
+
+        if (clickedPlayer != null) {
+            // Notify B they were clicked — B should start sharing
+            Map<String, Object> notifyB = new HashMap<>();
+            notifyB.put("type", "you-were-clicked");
+            notifyB.put("clicker", clicker);
+            messagingTemplate.convertAndSendToUser(
+                    clickedPlayer,
+                    "/queue/" + roomId + "/access-to-screen-feed",
+                    notifyB
+            );
+
+            // Notify A who they clicked — A should watch that player's screen
+            Map<String, Object> notifyA = new HashMap<>();
+            notifyA.put("type", "you-clicked-player");
+            notifyA.put("clickedUserId", clickedPlayer);
+            messagingTemplate.convertAndSendToUser(
+                    clicker,
+                    "/queue/" + roomId + "/access-to-screen-feed",
+                    notifyA
+            );
         }
     }
 

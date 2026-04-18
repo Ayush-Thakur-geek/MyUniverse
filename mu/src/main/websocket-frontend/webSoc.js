@@ -78,6 +78,12 @@ class GameWebSocket {
                     this.initialPlayerState(initialPlayers);
                 }
             });
+
+            this.stompClient.subscribe(`/user/queue/${this.roomId}/access-to-screen-feed`, (message) => {
+                const clickInfo = JSON.parse(message.body);
+                console.log("clickInfo:", clickInfo);
+                if (this.handleClick) this.handleClick(clickInfo);
+            })
         });
     }
 
@@ -95,6 +101,12 @@ class GameWebSocket {
     requestVideoSession() {
         if (this.stompClient && this.stompClient.connected) {
             this.stompClient.send(`/app/${this.roomId}/request-video-session`, {}, JSON.stringify({}));
+        }
+    }
+
+    checkTheClickOverlap(roomId, username, x, y) {
+        if (this.stompClient && this.stompClient.connected) {
+            this.stompClient.send(`/app/${roomId}/check-overlap`, {}, JSON.stringify({roomId, username, x, y}));
         }
     }
 

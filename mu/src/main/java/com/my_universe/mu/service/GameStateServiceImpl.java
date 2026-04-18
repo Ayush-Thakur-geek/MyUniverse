@@ -42,6 +42,10 @@ public class GameStateServiceImpl implements GameStateService {
 
     private final UnifiedJedis jedis;
 
+    final float MINIMUM_DISTANCE = 32.0f;
+
+    final float PROXIMITY_DISTANCE = 60.0f;
+
     ExecutorService executor = Executors.newFixedThreadPool(10);
 
     GameStateServiceImpl(RoomService roomService, SimpMessagingTemplate messagingTemplate, RestTemplate restTemplate, ObjectMapper objectMapper) {
@@ -251,9 +255,6 @@ public class GameStateServiceImpl implements GameStateService {
             newI = Math.max(0, Math.min(numBlocksX - 1, newI));
             newJ = Math.max(0, Math.min(numBlocksY - 1, newJ));
 
-            final float MINIMUM_DISTANCE = 32.0f;
-            final float PROXIMITY_DISTANCE = 60.0f;
-
             Set<String> currentProximityPlayers = new HashSet<>();
 
             // Check collision in current and adjacent cells
@@ -322,27 +323,75 @@ public class GameStateServiceImpl implements GameStateService {
         }
     }
 
+    public String checkCollision(String userName, String roomId, int clickX, int clickY) {
+        int x = (int) Math.floor(clickX / 100);
+        int y = (int) Math.floor(clickY / 100);
+        x = Math.max(0, Math.min(numBlocksX - 1, x));
+        y = Math.max(0, Math.min(numBlocksY - 1, y));
 
-    private void handleProximityChanges(String roomId, String userName, Set<String> currentProximityPlayers) {
-        ConcurrentMap<String, Set<String>> roomProximity = roomProximityMap.get(roomId);
-        Set<String> previousProximityPlayers = roomProximity.getOrDefault(userName, new HashSet<>());
+        System.out.println("In checkCollision function");
 
-        Set<String> newProximityPlayers = new HashSet<>(currentProximityPlayers);
-        newProximityPlayers.removeAll(previousProximityPlayers);
+        for (int di = -1; di <= 1; di++) {
+            for (int dj = -1; dj <= 1; dj++) {
+                int checkI = x + di;
+                int checkJ = y + dj;
 
-        Set<String> leavingPlayers = new HashSet<>(previousProximityPlayers);
-        leavingPlayers.removeAll(currentProximityPlayers);
+                if (checkI < 0 || checkI >= numBlocksX || checkJ < 0 || checkJ >= numBlocksY) {
+                    continue;
+                }
 
-        // FIX: Store ALL current proximity players, not just new ones
-        roomProximity.put(userName, currentProximityPlayers); // Changed from newProximityPlayers
+                Set<String> userNames = jedis.smembers("room:" + roomId + ":grid:" + checkI + ":" + checkJ);
 
-        System.out.println("proximity players updated: " + currentProximityPlayers.size());
+                for (String uname : userNames) {
+                    if (!uname.equals(userName)) {
+                        String neighbourPlayerJson = jedis.hget("room:" + roomId + ":players", uname);
+                        if (neighbourPlayerJson == null) continue; // Skip if player was just removed
 
-        if (!newProximityPlayers.isEmpty() || !leavingPlayers.isEmpty()) {
-            System.out.println("calling sendProximityUpdates()");
-            sendProximityUpdates(roomId, userName, newProximityPlayers, leavingPlayers);
+                        PlayerState neighbourPlayerState = null;
+                        try {
+                            neighbourPlayerState = objectMapper.readValue(neighbourPlayerJson, PlayerState.class);
+                        } catch (JsonProcessingException e) {
+                            throw new RuntimeException(e);
+                        }
+                        float dx = neighbourPlayerState.getX() - clickX;
+                        float dy = neighbourPlayerState.getY() - clickY;
+                        float distance = (float) Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance < MINIMUM_DISTANCE) {
+                            log.info("Click collision detected: Player " + userName + " clicks too close to " +
+                                    neighbourPlayerState.getUserName() + " (distance: " + distance + ")");
+
+                            return neighbourPlayerState.getUserName();
+                        }
+                    }
+                }
+            }
         }
+        System.out.println("no click collision detected");
+        return null;
     }
+
+
+//    private void handleProximityChanges(String roomId, String userName, Set<String> currentProximityPlayers) {
+//        ConcurrentMap<String, Set<String>> roomProximity = roomProximityMap.get(roomId);
+//        Set<String> previousProximityPlayers = roomProximity.getOrDefault(userName, new HashSet<>());
+//
+//        Set<String> newProximityPlayers = new HashSet<>(currentProximityPlayers);
+//        newProximityPlayers.removeAll(previousProximityPlayers);
+//
+//        Set<String> leavingPlayers = new HashSet<>(previousProximityPlayers);
+//        leavingPlayers.removeAll(currentProximityPlayers);
+//
+//        // FIX: Store ALL current proximity players, not just new ones
+//        roomProximity.put(userName, currentProximityPlayers); // Changed from newProximityPlayers
+//
+//        System.out.println("proximity players updated: " + currentProximityPlayers.size());
+//
+//        if (!newProximityPlayers.isEmpty() || !leavingPlayers.isEmpty()) {
+//            System.out.println("calling sendProximityUpdates()");
+//            sendProximityUpdates(roomId, userName, newProximityPlayers, leavingPlayers);
+//        }
+//    }
 
     private void handleProximityChangesJedis(String roomId, String userName, Set<String> currentProximityPlayers) {
         String proxKey = "room:" + roomId + ":proximity:" + userName;
